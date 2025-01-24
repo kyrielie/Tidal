@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "package": "net.superkat.tidal.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "WaterFluidMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "client": [
+    "ClientWorldMixin"
+  ]
+}
