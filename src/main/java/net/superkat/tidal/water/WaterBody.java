@@ -7,6 +7,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Keep track of water blocks, and understand roughly how big areas of water are.
@@ -26,6 +27,29 @@ public class WaterBody {
 
     public void mergeWaterBody(WaterBody waterBody) {
         this.waterBlocks.addAll(waterBody.waterBlocks);
+    }
+
+    public void addBlocks(Set<BlockPos> blocks) {
+        this.waterBlocks.addAll(blocks);
+    }
+
+    public void addNeighbours(ClientWorld world, Set<BlockPos> neighbours) {
+        this.mainPos = topOfWater(world, this.initPos);
+        Set<BlockPos> topNeighbours = neighbours.stream().map(pos -> topOfWater(world, pos)).collect(Collectors.toSet());
+        addBlocks(topNeighbours);
+
+//        Map<BlockPos, Boolean> waterNeighbours = neighbours.entrySet().stream()
+//                .filter(Map.Entry::getValue)
+//                .collect(
+//                        Collectors.toMap(entry -> topOfWater(world, entry.getKey()), entry -> true)
+//                );
+
+//        Set<BlockPos> waterNeighbours = neighbours.entrySet().stream()
+//                .filter(Map.Entry::getValue) //block is water
+//                .map(entry -> topOfWater(world, entry.getKey()))
+//                .collect(Collectors.toSet());
+//
+//        this.waterBlocks.addAll(waterNeighbours);
     }
 
     public void addNeighbours(ClientWorld world, int distance) {
