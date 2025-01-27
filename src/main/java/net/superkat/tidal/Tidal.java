@@ -12,11 +12,9 @@ public class Tidal implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
-		LOGGER.info("Hello Fabric world!");
-
 		ClientTickEvents.END_WORLD_TICK.register(clientWorld -> {
 			TidalWorld tidalWorld = (TidalWorld) clientWorld;
-			tidalWorld.tidal$tidalWaveHandler().tickWorld();
+			tidalWorld.tidal$tidalWaveHandler().tick();
 		});
 	}
 }
