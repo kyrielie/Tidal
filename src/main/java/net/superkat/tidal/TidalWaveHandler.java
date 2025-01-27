@@ -2,6 +2,7 @@ package net.superkat.tidal;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.client.MinecraftClient;
@@ -20,9 +21,9 @@ import net.minecraft.util.math.random.Random;
 import net.minecraft.world.World;
 import net.superkat.tidal.config.TidalConfig;
 import net.superkat.tidal.water.WaterBody;
-import org.apache.commons.compress.utils.Sets;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -108,6 +109,8 @@ public class TidalWaveHandler {
     }
 
     public void tick(ClientPlayerEntity player) {
+        tickWaterBodies();
+
         BlockPos playerPos = player.getBlockPos();
         BlockPos.Mutable pos = new BlockPos.Mutable();
         int horizontalRadius = TidalConfig.horizontalWaveDistance;
@@ -120,15 +123,26 @@ public class TidalWaveHandler {
         int y = playerPos.getY() + random.nextInt(verticalRadius) - random.nextInt(verticalRadius);
         int z = playerPos.getZ() + random.nextInt(horizontalRadius) - random.nextInt(horizontalRadius);
         pos.set(x, y, z);
-        System.out.println(pos);
 
         tickPos(pos);
+    }
+
+    public void tickWaterBodies() {
+        Iterator<WaterBody> iterator = this.waterBodies.iterator();
+
+        while (iterator.hasNext()) {
+            WaterBody waterBody = iterator.next();
+            waterBody.tick();
+            if(waterBody.shouldRemove()) {
+                //occasionally remove water bodies to clear up mistakes in block removing and other jank
+                iterator.remove();
+            }
+        }
     }
 
     //I hope in time I'm able to look back at this and think, "wow, that's really inefficient",
     //not because I want this to be inefficient, but because I hope I'll have improved and be more knowledgeable
     public void tickPos(BlockPos pos) {
-        //TODO - water body splitting(good luck lol)
         //FIXME - if a water body is trying to be merged inbetween two other water bodies while the center block is not water
         //both water bodies will be merged despite not being connected
 
@@ -139,20 +153,10 @@ public class TidalWaveHandler {
                 .map(Map.Entry::getKey)
                 .collect(Collectors.toSet());
 
-//        boolean blockRemoved = false;
         for (BlockPos nonWaterPos : nonWater) {
-//            boolean wasRemovedFromWaterBody = removePosFromWaterBodies(nonWaterPos);
-//            if(wasRemovedFromWaterBody) blockRemoved = true;
             removePosFromWaterBodies(nonWaterPos);
             neighbourBlocks.remove(nonWaterPos);
         }
-
-//        if(blockRemoved) {
-//            if(!waterBodies.isEmpty()) {
-//                WaterBody randomWater = waterBodies.stream().toList().get(getRandom().nextInt(waterBodies.size()));
-//                splitWaterBody(randomWater);
-//            }
-//        }
 
         //neighbourBlocks are now all water blocks
         if(neighbourBlocks.isEmpty()) return;
@@ -200,41 +204,11 @@ public class TidalWaveHandler {
                 .orElse(null);
     }
 
-//    public void splitWaterBody(WaterBody waterBody) {
-//        List<WaterBody> split = waterBody.split(4);
-//        waterBodies.addAll(split);
-//        waterBodies.remove(waterBody);
-//    }
-
-//    //Split the water body into 4 parts, with the center being the pos
-//    //splitting will never be perfect because not all blocks are checked,
-//    //but because merging is happening every tick, any mistakes will be fixed with time
-//    public void splitWaterBodyAtPos(WaterBody waterBody, Map<BlockPos, Boolean> neighbours, BlockPos pos) {
-//        List<BlockPos> xSortedBlocks = neighbours.keySet().stream().sorted(Comparator.comparingInt(Vec3i::getX)).toList();
-//        int size = xSortedBlocks.size();
-//        List<List<BlockPos>> splitBlocksList = Lists.partition(xSortedBlocks, size / 4);
-//
-////        List<WaterBody> splitResults = new ArrayList<>();
-//
-//        for (List<BlockPos> blockList : splitBlocksList) {
-//            WaterBody splitWater = new WaterBody(pos);
-//            splitWater.addBlocks(new HashSet<>(blockList));
-//            waterBodies.add(splitWater);
-////            splitResults.add(splitWater);
-//        }
-//
-//        waterBodies.remove(waterBody);
-////        return splitResults;
-//    }
-
 
     public void removePosFromWaterBodies(BlockPos pos) {
-//        boolean wasRemoved = false;
         for (WaterBody waterBody : waterBodies) {
-//            if(waterBody.waterBlocks.remove(pos)) wasRemoved = true;
-            waterBody.waterBlocks.remove(pos);
+            waterBody.removeBlock(pos);
         }
-//        return wasRemoved;
     }
 
     public boolean posInWaterBody(BlockPos pos) {
