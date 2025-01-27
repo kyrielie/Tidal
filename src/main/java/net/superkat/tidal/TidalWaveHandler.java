@@ -7,9 +7,12 @@ import net.minecraft.block.Blocks;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.world.ClientWorld;
+import net.minecraft.entity.Entity;
 import net.minecraft.item.Items;
 import net.minecraft.particle.ParticleEffect;
 import net.minecraft.particle.ParticleTypes;
+import net.minecraft.sound.SoundEvents;
+import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
@@ -36,6 +39,9 @@ public class TidalWaveHandler {
 
     //TODO - good luck syncing this client-side only lol
     public static Random getRandom() {
+//        long time = MinecraftClient.getInstance().world.getTime();
+//        long random = 5L * Math.round(time / 5f); //math.ceil instead?
+//        return Random.create(random);
         return Random.create();
     }
 
@@ -45,10 +51,24 @@ public class TidalWaveHandler {
         assert player != null;
 
         if(player.getActiveItem().isOf(Items.SPYGLASS) && player.getItemUseTime() >= 10) {
-            for (int i = 0; i < 10; i++) {
-                tick(player);
+            if(player.getItemUseTime() == 10) {
+                player.playSound(SoundEvents.BLOCK_AMETHYST_BLOCK_RESONATE, 1f, 1f);
+            }
+            if(player.isSneaking()) {
+                Entity entity = client.getCameraEntity();
+                BlockHitResult blockHitResult = (BlockHitResult) entity.raycast(20, 0f, true);
+                BlockPos raycastPos = blockHitResult.getBlockPos();
+                tickPos(raycastPos);
+            } else {
+                for (int i = 0; i < 10; i++) {
+                    tick(player);
+                }
             }
         }
+
+//        if(player.getWorld().getTime() % 40 == 0) {
+//            tick(player);
+//        }
 
         //temp junk particles to see water bodies
         List<ParticleEffect> particles = Lists.newArrayList(
@@ -100,6 +120,7 @@ public class TidalWaveHandler {
         int y = playerPos.getY() + random.nextInt(verticalRadius) - random.nextInt(verticalRadius);
         int z = playerPos.getZ() + random.nextInt(horizontalRadius) - random.nextInt(horizontalRadius);
         pos.set(x, y, z);
+        System.out.println(pos);
 
         tickPos(pos);
     }
@@ -107,6 +128,10 @@ public class TidalWaveHandler {
     //I hope in time I'm able to look back at this and think, "wow, that's really inefficient",
     //not because I want this to be inefficient, but because I hope I'll have improved and be more knowledgeable
     public void tickPos(BlockPos pos) {
+        //TODO - water body splitting(good luck lol)
+        //FIXME - if a water body is trying to be merged inbetween two other water bodies while the center block is not water
+        //both water bodies will be merged despite not being connected
+
         //3x3x3 blocks
         Map<BlockPos, Boolean> neighbourBlocks = getBlockNeighbour(world, pos, 1, -1, 1);
         Set<BlockPos> nonWater = neighbourBlocks.entrySet().stream()
@@ -114,10 +139,20 @@ public class TidalWaveHandler {
                 .map(Map.Entry::getKey)
                 .collect(Collectors.toSet());
 
-        for (BlockPos nonWaterBlock : nonWater) {
-            removeBlockFromWaterBodies(nonWaterBlock);
-            neighbourBlocks.remove(nonWaterBlock);
+//        boolean blockRemoved = false;
+        for (BlockPos nonWaterPos : nonWater) {
+//            boolean wasRemovedFromWaterBody = removePosFromWaterBodies(nonWaterPos);
+//            if(wasRemovedFromWaterBody) blockRemoved = true;
+            removePosFromWaterBodies(nonWaterPos);
+            neighbourBlocks.remove(nonWaterPos);
         }
+
+//        if(blockRemoved) {
+//            if(!waterBodies.isEmpty()) {
+//                WaterBody randomWater = waterBodies.stream().toList().get(getRandom().nextInt(waterBodies.size()));
+//                splitWaterBody(randomWater);
+//            }
+//        }
 
         //neighbourBlocks are now all water blocks
         if(neighbourBlocks.isEmpty()) return;
@@ -165,8 +200,41 @@ public class TidalWaveHandler {
                 .orElse(null);
     }
 
-    public void removeBlockFromWaterBodies(BlockPos pos) {
-        waterBodies.forEach(waterBody -> waterBody.waterBlocks.remove(pos));
+//    public void splitWaterBody(WaterBody waterBody) {
+//        List<WaterBody> split = waterBody.split(4);
+//        waterBodies.addAll(split);
+//        waterBodies.remove(waterBody);
+//    }
+
+//    //Split the water body into 4 parts, with the center being the pos
+//    //splitting will never be perfect because not all blocks are checked,
+//    //but because merging is happening every tick, any mistakes will be fixed with time
+//    public void splitWaterBodyAtPos(WaterBody waterBody, Map<BlockPos, Boolean> neighbours, BlockPos pos) {
+//        List<BlockPos> xSortedBlocks = neighbours.keySet().stream().sorted(Comparator.comparingInt(Vec3i::getX)).toList();
+//        int size = xSortedBlocks.size();
+//        List<List<BlockPos>> splitBlocksList = Lists.partition(xSortedBlocks, size / 4);
+//
+////        List<WaterBody> splitResults = new ArrayList<>();
+//
+//        for (List<BlockPos> blockList : splitBlocksList) {
+//            WaterBody splitWater = new WaterBody(pos);
+//            splitWater.addBlocks(new HashSet<>(blockList));
+//            waterBodies.add(splitWater);
+////            splitResults.add(splitWater);
+//        }
+//
+//        waterBodies.remove(waterBody);
+////        return splitResults;
+//    }
+
+
+    public void removePosFromWaterBodies(BlockPos pos) {
+//        boolean wasRemoved = false;
+        for (WaterBody waterBody : waterBodies) {
+//            if(waterBody.waterBlocks.remove(pos)) wasRemoved = true;
+            waterBody.waterBlocks.remove(pos);
+        }
+//        return wasRemoved;
     }
 
     public boolean posInWaterBody(BlockPos pos) {

@@ -29,6 +29,52 @@ public class WaterBody {
         this.waterBlocks.addAll(waterBody.waterBlocks);
     }
 
+//    public List<WaterBody> split(int amount) {
+//        List<BlockPos> blocks = waterBlocks.stream().toList();
+//
+//        BlockPos maxX = Collections.max(blocks, Comparator.comparingInt(Vec3i::getX));
+//        BlockPos minX = Collections.min(blocks, Comparator.comparingInt(Vec3i::getX));
+//        int distanceX = maxX.getX() - minX.getX();
+//        BlockPos maxZ = Collections.max(blocks, Comparator.comparingInt(Vec3i::getZ));
+//        BlockPos minZ = Collections.min(blocks, Comparator.comparingInt(Vec3i::getZ));
+//        int distanceZ = maxZ.getZ() - minZ.getZ();
+//
+//        List<BlockPos> minXHalf = blocks.stream().filter(pos -> pos.getX() < minX.getX() + distanceX / 2).toList();
+//        List<BlockPos> maxXHalf = blocks.stream().filter(pos -> pos.getX() >= minX.getX() + distanceX / 2).toList();
+//
+//        List<BlockPos> minZQuarter = minXHalf.stream().filter(pos -> pos.getZ() < minZ.getZ() + distanceZ / 2).toList();
+//        List<BlockPos> maxZQuarter = maxXHalf.stream().filter(pos -> pos.getZ() >= minZ.getZ() + distanceZ / 2).toList();
+//        List<BlockPos> minXQuarter = minXHalf.stream().filter(pos -> !minZQuarter.contains(pos)).toList();
+//        List<BlockPos> maxXQuarter = maxXHalf.stream().filter(pos -> !maxZQuarter.contains(pos)).toList();
+//
+//        List<List<BlockPos>> split = new ArrayList<>();
+//        split.add(minXQuarter);
+//        split.add(maxXQuarter);
+//        split.add(minZQuarter);
+//        split.add(maxZQuarter);
+//        List<WaterBody> results = new ArrayList<>();
+//
+//        for (List<BlockPos> blockList : split) {
+//            WaterBody splitResult = new WaterBody(this.initPos);
+//            splitResult.addBlocks(new HashSet<>(blockList));
+//            results.add(splitResult);
+//        }
+//
+//        if(blocks.isEmpty() || blocks.size() / amount <= 0) return Collections.emptyList();
+//        int splitAmount = blocks.size() / amount;
+//        List<List<BlockPos>> split = Lists.partition(blocks, splitAmount);
+//
+//        List<WaterBody> results = new ArrayList<>();
+//
+//        for (List<BlockPos> blockList : split) {
+//            WaterBody splitResult = new WaterBody(this.initPos);
+//            splitResult.addBlocks(new HashSet<>(blockList));
+//            results.add(splitResult);
+//        }
+
+//        return results;
+//    }
+
     public void addBlocks(Set<BlockPos> blocks) {
         this.waterBlocks.addAll(blocks);
     }
@@ -37,28 +83,6 @@ public class WaterBody {
         this.mainPos = topOfWater(world, this.initPos);
         Set<BlockPos> topNeighbours = neighbours.stream().map(pos -> topOfWater(world, pos)).collect(Collectors.toSet());
         addBlocks(topNeighbours);
-
-//        Map<BlockPos, Boolean> waterNeighbours = neighbours.entrySet().stream()
-//                .filter(Map.Entry::getValue)
-//                .collect(
-//                        Collectors.toMap(entry -> topOfWater(world, entry.getKey()), entry -> true)
-//                );
-
-//        Set<BlockPos> waterNeighbours = neighbours.entrySet().stream()
-//                .filter(Map.Entry::getValue) //block is water
-//                .map(entry -> topOfWater(world, entry.getKey()))
-//                .collect(Collectors.toSet());
-//
-//        this.waterBlocks.addAll(waterNeighbours);
-    }
-
-    public void addNeighbours(ClientWorld world, int distance) {
-        this.mainPos = topOfWater(world, this.initPos);
-        for (BlockPos blockPos : BlockPos.iterate(this.mainPos.add(-distance, 0, -distance), this.mainPos.add(distance, 1, distance))) {
-            if (posIsWater(world, blockPos)) {
-                this.waterBlocks.add(topOfWater(world, blockPos));
-            }
-        }
     }
 
     public boolean posIsWater(ClientWorld world, BlockPos pos) {
