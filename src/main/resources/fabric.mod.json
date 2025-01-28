@@ -17,6 +17,9 @@
 	"entrypoints": {
 		"main": [
 			"net.superkat.tidal.Tidal"
+		],
+		"client": [
+			"net.superkat.tidal.TidalClient"
 		]
 	},
 	"mixins": [

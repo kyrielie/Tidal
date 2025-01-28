@@ -19,7 +19,7 @@ public class TidalWaveHandler {
     }
 
     /**
-     * @return A random Random with a randomly generated random Random seed.
+     * @return A random Random with a randomly generated random RandomSeed seed.
      */
     public static Random getRandom() {
         return Random.create();
