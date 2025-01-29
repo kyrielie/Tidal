@@ -1,4 +1,4 @@
-package net.superkat.tidal.particles;
+package net.superkat.tidal.particles.debug;
 
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;

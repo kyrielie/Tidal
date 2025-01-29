@@ -4,6 +4,7 @@ import com.google.common.collect.Sets;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.registry.tag.FluidTags;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Vec3i;
 
 import java.util.Set;
 
@@ -16,6 +17,18 @@ public abstract class AbstractBlockSetTracker {
 
     public void tick() {
         tick++;
+    }
+
+    /**
+     * @return The center of all the BlockPos positions. May not be included in the blocks set!
+     */
+    public BlockPos center() {
+        int size = blocks.size();
+        //I'm sorta proud of coming up with this map stream thingy all by myself :)
+        int centerX = blocks.stream().mapToInt(Vec3i::getX).sum() / size;
+        int randomY = blocks.stream().toList().getFirst().getY(); //random y because likely all the same y level
+        int centerZ = blocks.stream().mapToInt(Vec3i::getZ).sum() / size;
+        return new BlockPos(centerX, randomY, centerZ);
     }
 
     public boolean shouldRemove() {

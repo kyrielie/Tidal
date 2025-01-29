@@ -1,4 +1,4 @@
-package net.superkat.tidal.particles;
+package net.superkat.tidal.particles.debug;
 
 import net.minecraft.client.particle.AbstractDustParticle;
 import net.minecraft.client.particle.SpriteProvider;

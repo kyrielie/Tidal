@@ -18,6 +18,14 @@ public class TidalWaveHandler {
         this.waterBodyHandler = new WaterBodyHandler(world, this);
     }
 
+    public void tick() {
+        MinecraftClient client = MinecraftClient.getInstance();
+        ClientPlayerEntity player = client.player;
+        assert player != null;
+
+        waterBodyHandler.tick();
+    }
+
     /**
      * @return A random Random with a randomly generated random RandomSeed seed.
      */
@@ -32,15 +40,6 @@ public class TidalWaveHandler {
         long time = MinecraftClient.getInstance().world.getTime();
         long random = 5L * Math.round(time / 5f); //math.ceil instead?
         return Random.create(random);
-    }
-
-
-    public void tick() {
-        MinecraftClient client = MinecraftClient.getInstance();
-        ClientPlayerEntity player = client.player;
-        assert player != null;
-
-        waterBodyHandler.tick();
     }
 
 }

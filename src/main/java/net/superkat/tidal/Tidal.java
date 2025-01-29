@@ -8,8 +8,8 @@ import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.util.Identifier;
 import net.superkat.tidal.duck.TidalWorld;
-import net.superkat.tidal.particles.DebugShorelineParticle;
-import net.superkat.tidal.particles.DebugWaterBodyParticle;
+import net.superkat.tidal.particles.debug.DebugShorelineParticle;
+import net.superkat.tidal.particles.debug.DebugWaterBodyParticle;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

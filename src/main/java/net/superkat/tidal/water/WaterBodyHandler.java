@@ -8,6 +8,7 @@ import net.minecraft.client.world.ClientWorld;
 import net.minecraft.entity.Entity;
 import net.minecraft.fluid.FluidState;
 import net.minecraft.item.Items;
+import net.minecraft.particle.ParticleTypes;
 import net.minecraft.registry.tag.FluidTags;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.util.hit.BlockHitResult;
@@ -16,8 +17,8 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.math.random.Random;
 import net.superkat.tidal.TidalWaveHandler;
 import net.superkat.tidal.config.TidalConfig;
-import net.superkat.tidal.particles.DebugShorelineParticle;
-import net.superkat.tidal.particles.DebugWaterBodyParticle;
+import net.superkat.tidal.particles.debug.DebugShorelineParticle;
+import net.superkat.tidal.particles.debug.DebugWaterBodyParticle;
 
 import java.awt.*;
 import java.util.Iterator;
@@ -57,6 +58,8 @@ public class WaterBodyHandler {
                 BlockPos raycastPos = blockHitResult.getBlockPos();
                 checkPos(raycastPos);
             } else {
+                tickBlockSetTracker(this.waterBodies);
+                tickBlockSetTracker(this.shorelines);
                 for (int i = 0; i < 10; i++) {
                     tickRandomPos(player);
                 }
@@ -73,28 +76,24 @@ public class WaterBodyHandler {
         for (WaterBody water : waterBodies) {
             Color color = debugColor(i, waterBodies.size());
             i++;
-//            //super ultra cursed debug colors - wait actually I'm a bit of a genuius
-//            int red = i == 1 ? 255 : i == 2 || i == 3 ? 0 : (i % 3 == 1 ? 255 - (255 / waterBodies.size() * (i - 3)) : 255);
-//            int green = i == 2 ? 255 : i == 1 || i == 3 ? 0 : (i % 3 == 2 ? 255 - (255 / waterBodies.size() * (i - 3)) : 255);
-//            int blue = i == 3 ? 255 : i == 1 || i == 2 ? 0 : (i % 3 == 0 ? 255 - (255 / waterBodies.size() * (i - 3)) : 255);
-//            Color color = new Color(red, green, blue);
             water.blocks.forEach(blockPos -> {
                 Vec3d pos = blockPos.toCenterPos();
+//                this.world.addParticle(new DebugWaterBodyParticle.DebugWaterBodyParticleEffect(Vec3d.unpackRgb(color.getRGB()).toVector3f(), 1f), true, pos.getX(), pos.getY() + 1, pos.getZ(), 0, 0, 0);
                 this.world.addParticle(new DebugWaterBodyParticle.DebugWaterBodyParticleEffect(Vec3d.unpackRgb(color.getRGB()).toVector3f(), 1f), pos.getX(), pos.getY() + 1, pos.getZ(), 0, 0, 0);
             });
+
+            Vec3d center = water.center().toCenterPos();
+            this.world.addParticle(ParticleTypes.EXPLOSION, center.getX(), center.getY() + 1, center.getZ(), 0, 0, 0);
+
         }
 
         i = 0;
         for (Shoreline shoreline : shorelines) {
             Color color = debugColor(i, shorelines.size());
             i++;
-//            //super ultra cursed debug colors - wait actually I'm a bit of a genuius
-//            int red = i == 1 ? 255 : i == 2 || i == 3 ? 0 : (i % 3 == 1 ? 255 - (255 / waterBodies.size() * (i - 3)) : 255);
-//            int green = i == 2 ? 255 : i == 1 || i == 3 ? 0 : (i % 3 == 2 ? 255 - (255 / waterBodies.size() * (i - 3)) : 255);
-//            int blue = i == 3 ? 255 : i == 1 || i == 2 ? 0 : (i % 3 == 0 ? 255 - (255 / waterBodies.size() * (i - 3)) : 255);
-//            Color color = new Color(red, green, blue);
             shoreline.blocks.forEach(blockPos -> {
                 Vec3d pos = blockPos.toCenterPos();
+//                this.world.addParticle(new DebugShorelineParticle.DebugShorelineParticleEffect(Vec3d.unpackRgb(color.getRGB()).toVector3f(), 1f), true, pos.getX(), pos.getY() + 1, pos.getZ(), 0, 0, 0);
                 this.world.addParticle(new DebugShorelineParticle.DebugShorelineParticleEffect(Vec3d.unpackRgb(color.getRGB()).toVector3f(), 1f), pos.getX(), pos.getY() + 1, pos.getZ(), 0, 0, 0);
             });
         }
@@ -116,29 +115,25 @@ public class WaterBodyHandler {
         return Math.max(color, 0); //wow intellij really smart
     }
 
-    public void tickWaterBodies() {
-        Iterator<WaterBody> iterator = this.waterBodies.iterator();
-
+    public void tickBlockSetTracker(Set<? extends AbstractBlockSetTracker> set) {
+        Iterator<? extends AbstractBlockSetTracker> iterator = set.iterator();
         while (iterator.hasNext()) {
-            WaterBody waterBody = iterator.next();
-            waterBody.tick();
-
-            if(waterBody.shouldRemove()) {
-                //occasionally remove water bodies to clear up mistakes in block removing and other jank
+            AbstractBlockSetTracker tracker = iterator.next();
+            tracker.tick();
+            if(tracker.shouldRemove()) {
+                //occasionally remove water bodies/shorelines to clear up mistakes in block removing and other jank
                 iterator.remove();
             }
         }
     }
 
     public void tickRandomPos(ClientPlayerEntity player) {
-        tickWaterBodies();
-
         BlockPos playerPos = player.getBlockPos();
         BlockPos.Mutable pos = new BlockPos.Mutable();
         int horizontalRadius = TidalConfig.horizontalWaveDistance;
         int verticalRadius = TidalConfig.verticalWaveDistance;
-//        int horizontalRadius = 128;
-//        int verticalRadius = 32;
+//        int horizontalRadius = 32;
+//        int verticalRadius = 16;
         Random random = TidalWaveHandler.getRandom();
 
         //get random position
@@ -156,7 +151,7 @@ public class WaterBodyHandler {
         //both water bodies will be merged despite not being connected
 
         //3x1x3 blocks
-        Map<BlockPos, Boolean> neighbourBlocks = getBlockNeighbour(world, pos, 1, 0, 0);
+        Map<BlockPos, Boolean> neighbourBlocks = getBlockNeighbours(world, pos, 2);
         Set<BlockPos> nonWater = neighbourBlocks.entrySet().stream()
                 .filter(entry -> !entry.getValue())
                 .map(Map.Entry::getKey)
@@ -182,24 +177,29 @@ public class WaterBodyHandler {
             if(!tryMergeShoreline(shoreline)) this.shorelines.add(shoreline);
         }
 
-        for (BlockPos water : neighbourBlocks.keySet()) {
-            removePosFromShorelines(water);
+        for (BlockPos waterPos : neighbourBlocks.keySet()) {
+            removePosFromShorelines(waterPos);
         }
 
         if(tryMergeWaterBody(waterBody)) return;
-
+        //if water body wasn't merged into another, add it to the set
         this.waterBodies.add(waterBody);
     }
 
-    public static Map<BlockPos, Boolean> getBlockNeighbour(ClientWorld world, BlockPos pos, int horizontalDistance, int y1, int y2) {
+    public static Map<BlockPos, Boolean> getBlockNeighbours(ClientWorld world, BlockPos pos, int horizontalDistance) {
         Map<BlockPos, Boolean> cachedBlocks = Maps.newHashMap();
-
-        for (BlockPos blockPos : BlockPos.iterate(pos.add(-horizontalDistance, y1, -horizontalDistance), pos.add(horizontalDistance, y2, horizontalDistance))) {
+        for (BlockPos blockPos : BlockPos.iterate(pos.add(-horizontalDistance, 0, -horizontalDistance), pos.add(horizontalDistance, 0, horizontalDistance))) {
             cachedBlocks.computeIfAbsent(blockPos.mutableCopy(), pos1 -> posIsWater(world, pos1));
         }
         return cachedBlocks;
     }
 
+    /**
+     * Attempt to merge a water body into another(adds the water body's blocks into another)
+     *
+     * @param waterBody The water body to attempt to merge into already existing water bodies
+     * @return If the water body was successfully merged
+     */
     public boolean tryMergeWaterBody(WaterBody waterBody) {
         Set<WaterBody> checkedWaters = waterBodiesInAnother(waterBody);
         if(checkedWaters.isEmpty()) return false;
@@ -226,6 +226,12 @@ public class WaterBodyHandler {
         return true;
     }
 
+    /**
+     * Check if a water body's set of positions overlaps with other water bodies.
+     *
+     * @param waterBody The water body whose positions should be checked
+     * @return The set of water bodies that share any amount of BlockPos positions with the given water body
+     */
     public Set<WaterBody> waterBodiesInAnother(WaterBody waterBody) {
         return waterBodies.stream().filter(checkedWater -> waterBody.blocks.stream().anyMatch(pos -> checkedWater.blocks.contains(pos)))
                 .collect(Collectors.toSet());
@@ -236,6 +242,12 @@ public class WaterBodyHandler {
                 .collect(Collectors.toSet());
     }
 
+    /**
+     * Remove a BlockPos from all water bodies.
+     * <br><br>
+     * {@link WaterBody#removeBlock(BlockPos)} is called to allow its tick value to be increased, making it get deleted sooner to fix any possible changed block jank
+     * @param pos The BlockPos to be removed
+     */
     public void removePosFromWaterBodies(BlockPos pos) {
         for (WaterBody waterBody : waterBodies) {
             waterBody.removeBlock(pos);
@@ -248,6 +260,13 @@ public class WaterBodyHandler {
         }
     }
 
+    /**
+     * Check if a BlockPos is water or is waterlogged
+     *
+     * @param world World to check in
+     * @param pos BlockPos to check
+     * @return If the BlockPos is water or waterlogged
+     */
     public static boolean posIsWater(ClientWorld world, BlockPos pos) {
         FluidState state = world.getFluidState(pos);
         return state.isIn(FluidTags.WATER);

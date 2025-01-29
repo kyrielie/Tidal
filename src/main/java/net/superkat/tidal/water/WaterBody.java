@@ -14,15 +14,7 @@ import java.util.stream.Collectors;
  */
 public class WaterBody extends AbstractBlockSetTracker {
 
-//    public final BlockPos initPos;
-//    public BlockPos mainPos;
-
-//    public WaterBody(BlockPos initPos) {
-//        this.initPos = initPos;
-//    }
-
     public void addNeighbours(ClientWorld world, Set<BlockPos> neighbours) {
-//        this.mainPos = topOfWater(world, this.initPos);
         Set<BlockPos> topNeighbours = neighbours.stream().map(pos -> topOfWater(world, pos)).collect(Collectors.toSet());
         addBlocks(topNeighbours);
     }
