@@ -32,14 +32,17 @@ import java.util.stream.Collectors;
  * @see TidalWaveHandler
  */
 public class WaterBodyHandler {
-    public final ClientWorld world;
     public final TidalWaveHandler tidalWaveHandler;
+    public final ClientWorld world;
     public Set<WaterBody> waterBodies = Sets.newHashSet();
     public Set<Shoreline> shorelines = Sets.newHashSet();
+
+    public WaterScanner waterScanner;
 
     public WaterBodyHandler(ClientWorld world, TidalWaveHandler tidalWaveHandler) {
         this.world = world;
         this.tidalWaveHandler = tidalWaveHandler;
+        this.waterScanner = new WaterScanner(this, this.world, new BlockPos(0, -61, 0));
     }
 
     public void tick() {
@@ -47,19 +50,61 @@ public class WaterBodyHandler {
         ClientPlayerEntity player = client.player;
         assert player != null;
 
-        //debug tick test
-        if(player.getActiveItem().isOf(Items.SPYGLASS) && player.getItemUseTime() >= 10) {
-            if(player.getItemUseTime() == 10) {
-                player.playSound(SoundEvents.BLOCK_AMETHYST_BLOCK_RESONATE, 1f, 1f);
+        //debug water scanner test
+        if(TidalWaveHandler.altDebugTick()) {
+            if(player.getOffHandStack().isOf(Items.CLOCK)) {
+                if(player.isSneaking()) {
+                    this.clearWaterBodies();
+                    this.shorelines.clear();
+                }
+
+                Entity entity = client.getCameraEntity();
+                BlockHitResult blockHitResult = (BlockHitResult) entity.raycast(20, 0f, true);
+                BlockPos raycastPos = blockHitResult.getBlockPos();
+                this.waterScanner = new WaterScanner(this, this.world, raycastPos);
+                player.playSound(SoundEvents.BLOCK_VAULT_DEACTIVATE, 1f, 1f);
+            } else {
+                if(waterScanner != null) {
+                    for (int i = 0; i < 10; i++) {
+                        waterScanner.tick();
+                        if (waterScanner.isFinished()) {
+                            WaterBody waterBody = waterScanner.getWaterBody();
+                            waterBodies.add(waterBody);
+                            player.playSound(SoundEvents.ITEM_TRIDENT_THUNDER.value(), 1f, 1f);
+                            waterScanner = null;
+                            break;
+                        }
+                    }
+                }
             }
+        }
+
+        if(world.getTime() % 10 == 0) {
+            if(waterScanner != null) {
+                for (BlockPos blockPos : this.waterScanner.visitedBlocks.keySet()) {
+                    Color color = Color.GRAY;
+                    Vec3d pos = blockPos.toCenterPos();
+                    this.world.addParticle(new DebugWaterBodyParticle.DebugWaterBodyParticleEffect(Vec3d.unpackRgb(color.getRGB()).toVector3f(), 1f), true, pos.getX(), pos.getY() + 0.85, pos.getZ(), 0, 0, 0);
+                }
+
+                for (BlockPos blockPos : this.waterScanner.cachedBlocks.keySet()) {
+                    Color color = Color.DARK_GRAY;
+                    Vec3d pos = blockPos.toCenterPos();
+                    this.world.addParticle(new DebugWaterBodyParticle.DebugWaterBodyParticleEffect(Vec3d.unpackRgb(color.getRGB()).toVector3f(), 1f), true, pos.getX(), pos.getY() + 0.65, pos.getZ(), 0, 0, 0);
+                }
+            }
+        }
+
+        //debug tick test
+        if(TidalWaveHandler.debugTick()) {
+            tickBlockSetTracker(this.waterBodies);
+            tickBlockSetTracker(this.shorelines);
             if(player.isSneaking()) {
                 Entity entity = client.getCameraEntity();
                 BlockHitResult blockHitResult = (BlockHitResult) entity.raycast(20, 0f, true);
                 BlockPos raycastPos = blockHitResult.getBlockPos();
                 checkPos(raycastPos);
             } else {
-                tickBlockSetTracker(this.waterBodies);
-                tickBlockSetTracker(this.shorelines);
                 for (int i = 0; i < 10; i++) {
                     tickRandomPos(player);
                 }
@@ -82,8 +127,10 @@ public class WaterBodyHandler {
                 this.world.addParticle(new DebugWaterBodyParticle.DebugWaterBodyParticleEffect(Vec3d.unpackRgb(color.getRGB()).toVector3f(), 1f), pos.getX(), pos.getY() + 1, pos.getZ(), 0, 0, 0);
             });
 
-            Vec3d center = water.center().toCenterPos();
-            this.world.addParticle(ParticleTypes.EXPLOSION, center.getX(), center.getY() + 1, center.getZ(), 0, 0, 0);
+            if(player.getOffHandStack().isOf(Items.CLOCK)) {
+                Vec3d center = water.center().toCenterPos();
+                this.world.addParticle(ParticleTypes.EXPLOSION, center.getX(), center.getY() + 1, center.getZ(), 0, 0, 0);
+            }
 
         }
 

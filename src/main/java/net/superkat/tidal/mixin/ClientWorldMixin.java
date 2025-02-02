@@ -1,12 +1,15 @@
 package net.superkat.tidal.mixin;
 
+import net.minecraft.block.BlockState;
 import net.minecraft.client.network.ClientPlayNetworkHandler;
 import net.minecraft.client.render.WorldRenderer;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.entry.RegistryEntry;
+import net.minecraft.util.math.BlockPos;
 import net.superkat.tidal.TidalWaveHandler;
 import net.superkat.tidal.duck.TidalWorld;
+import net.superkat.tidal.event.ClientBlockUpdateEvent;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -25,6 +28,10 @@ public class ClientWorldMixin implements TidalWorld {
         this.tidalWaveHandler = new TidalWaveHandler((ClientWorld) (Object) this);
     }
 
+    @Inject(method = "handleBlockUpdate", at = @At("TAIL"))
+    public void tidal$blockUpdateEvent(BlockPos pos, BlockState state, int flags, CallbackInfo ci) {
+        ClientBlockUpdateEvent.BLOCK_UPDATE.invoker().onUpdate(pos, state);
+    }
 
     @Override
     public TidalWaveHandler tidal$tidalWaveHandler() {

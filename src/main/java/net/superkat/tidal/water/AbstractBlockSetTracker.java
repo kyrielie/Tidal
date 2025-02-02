@@ -5,6 +5,7 @@ import net.minecraft.client.world.ClientWorld;
 import net.minecraft.registry.tag.FluidTags;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3i;
+import net.superkat.tidal.TidalWaveHandler;
 
 import java.util.Set;
 
@@ -29,6 +30,12 @@ public abstract class AbstractBlockSetTracker {
         int randomY = blocks.stream().toList().getFirst().getY(); //random y because likely all the same y level
         int centerZ = blocks.stream().mapToInt(Vec3i::getZ).sum() / size;
         return new BlockPos(centerX, randomY, centerZ);
+    }
+
+    public BlockPos randomPos() {
+        //there's probably better way of doing this but okay
+        int size = blocks.size();
+        return blocks.stream().toList().get(TidalWaveHandler.getRandom().nextInt(size));
     }
 
     public boolean shouldRemove() {
