@@ -24,7 +24,6 @@ import net.superkat.tidal.particles.debug.DebugWaterBodyParticle;
 import org.apache.commons.compress.utils.Lists;
 
 import java.awt.*;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
@@ -74,8 +73,8 @@ public class WaterBodyHandler {
                 scanner.tick();
             }
             if(scanner.isFinished()) {
-                this.shorelines.addAll(scanner.shorelines);
-                this.waterBodies.addAll(scanner.waterBodies);
+//                this.shorelines.addAll(scanner.shorelines);
+//                this.waterBodies.addAll(scanner.waterBodies);
                 scanners.removeFirst();
             }
         }
@@ -95,10 +94,10 @@ public class WaterBodyHandler {
         }
 
         boolean farParticles = false;
-        if(scanner != null) {
-            debugTrackerParticles(new HashSet<>(scanner.waterBodies), true, farParticles, player.getOffHandStack().isOf(Items.CLOCK));
-            debugTrackerParticles(new HashSet<>(scanner.shorelines), false, farParticles, false);
-        }
+//        if(scanner != null) {
+//            debugTrackerParticles(new HashSet<>(scanner.waterBodies), true, farParticles, player.getOffHandStack().isOf(Items.CLOCK));
+//            debugTrackerParticles(new HashSet<>(scanner.shorelines), false, farParticles, false);
+//        }
 
         debugTrackerParticles(this.waterBodies, true, farParticles, player.getOffHandStack().isOf(Items.CLOCK));
         debugTrackerParticles(this.shorelines, false, farParticles, false);
@@ -209,7 +208,7 @@ public class WaterBodyHandler {
 
         for (WorldChunk chunk : chunks) {
             if(chunk.isEmpty()) continue;
-            ChunkScanner scanner = new ChunkScanner(world, MinecraftClient.getInstance().gameRenderer.getCamera(), chunk, minY, maxY);
+            ChunkScanner scanner = new ChunkScanner(this, world, chunk, minY, maxY);
             scanners.add(scanner);
         }
 
@@ -225,8 +224,8 @@ public class WaterBodyHandler {
         for (ChunkScanner scanner : this.scanners) {
             while (!scanner.isFinished()) {
                 scanner.tick();
-                this.shorelines.addAll(scanner.shorelines);
-                this.waterBodies.addAll(scanner.waterBodies);
+//                this.shorelines.addAll(scanner.shorelines);
+//                this.waterBodies.addAll(scanner.waterBodies);
             }
         }
 
