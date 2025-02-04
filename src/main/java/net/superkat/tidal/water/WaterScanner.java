@@ -3,11 +3,10 @@ package net.superkat.tidal.water;
 import com.google.common.collect.Maps;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.world.ClientWorld;
-import net.minecraft.fluid.FluidState;
-import net.minecraft.registry.tag.FluidTags;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
+import net.superkat.tidal.TidalWaveHandler;
 import org.apache.commons.compress.utils.Lists;
 
 import java.util.HashSet;
@@ -118,36 +117,34 @@ public class WaterScanner {
             //find & cache corner blocks
             List<BlockPos> corners = List.of(pos.add(1, 0, 1), pos.add(-1, 0, 1), pos.add(-1, 0, -1), pos.add(1, 0, -1));
             for (BlockPos corner : corners) {
-                if(!posIsWater(world, corner)) {
-                    nonWaterBlocks.add(corner);
-                    cachedBlocks.putIfAbsent(corner, false);
-                }
+                if(TidalWaveHandler.posIsWater(world, corner)) continue;
+                nonWaterBlocks.add(corner);
+                cachedBlocks.putIfAbsent(corner, false);
             }
 
             List<BlockPos> visitedNonWater = Lists.newArrayList();
 
             for (BlockPos nonWater : nonWaterBlocks) {
                 //don't check any of this if the block has already been checked/added for/to a shoreline
-                if(!visitedNonWater.contains(nonWater)) {
-                    List<BlockPos> shorelineBlocks = Lists.newArrayList();
-                    shorelineBlocks.add(nonWater);
+                if(visitedNonWater.contains(nonWater)) continue;
+                List<BlockPos> shorelineBlocks = Lists.newArrayList();
+                shorelineBlocks.add(nonWater);
 
-                    //add immediate neighbor blocks
-                    for (Direction direction : Direction.Type.HORIZONTAL) {
-                        BlockPos checkPos = nonWater.offset(direction);
-                        if(nonWaterBlocks.contains(checkPos) || (cachedBlocks.containsKey(checkPos) && !cachedBlocks.get(checkPos))) {
-                            shorelineBlocks.add(checkPos);
-                        }
+                //add immediate neighbor blocks
+                for (Direction direction : Direction.Type.HORIZONTAL) {
+                    BlockPos checkPos = nonWater.offset(direction);
+                    if(nonWaterBlocks.contains(checkPos) || (cachedBlocks.containsKey(checkPos) && !cachedBlocks.get(checkPos))) {
+                        shorelineBlocks.add(checkPos);
                     }
-
-                    //mark all blocks being added to the new shoreline as visited
-                    visitedNonWater.addAll(shorelineBlocks);
-
-                    Shoreline shoreline = new Shoreline();
-                    shoreline.addBlocks(new HashSet<>(shorelineBlocks));
-                    //try to merge shoreline into another, otherwise add it
-                    if(!waterBodyHandler.tryMergeShoreline(shoreline)) waterBodyHandler.shorelines.add(shoreline);
                 }
+
+                //mark all blocks being added to the new shoreline as visited
+                visitedNonWater.addAll(shorelineBlocks);
+
+                Shoreline shoreline = new Shoreline();
+                shoreline.addBlocks(new HashSet<>(shorelineBlocks));
+                //try to merge shoreline into another, otherwise add it
+                if(!waterBodyHandler.tryMergeShoreline(shoreline)) waterBodyHandler.shorelines.add(shoreline);
             }
         }
 
@@ -161,12 +158,7 @@ public class WaterScanner {
      * @return Returns if the BlockPos is water or not - NOT if the block was cached successfully(!!!), as you'd normally expect from a method like this
      */
     public boolean cacheBlock(BlockPos pos) {
-        return cachedBlocks.computeIfAbsent(pos, pos1 -> posIsWater(world, pos1));
-    }
-
-    public static boolean posIsWater(ClientWorld world, BlockPos pos) {
-        FluidState state = world.getFluidState(pos);
-        return state.isIn(FluidTags.WATER);
+        return cachedBlocks.computeIfAbsent(pos, pos1 -> TidalWaveHandler.posIsWater(world, pos1));
     }
 
 }

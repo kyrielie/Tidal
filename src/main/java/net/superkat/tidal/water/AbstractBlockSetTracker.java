@@ -7,6 +7,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3i;
 import net.superkat.tidal.TidalWaveHandler;
 
+import java.util.Collection;
 import java.util.Set;
 
 /**
@@ -15,6 +16,11 @@ import java.util.Set;
 public abstract class AbstractBlockSetTracker {
     public Set<BlockPos> blocks = Sets.newHashSet();
     public int tick = 0;
+
+    public AbstractBlockSetTracker withBlocks(Collection<BlockPos> blocks) {
+        this.addBlocks(blocks);
+        return this;
+    }
 
     public void tick() {
         tick++;
@@ -47,7 +53,7 @@ public abstract class AbstractBlockSetTracker {
         this.blocks.addAll(blockTracker.blocks);
     }
 
-    public void addBlocks(Set<BlockPos> blocks) {
+    public void addBlocks(Collection<BlockPos> blocks) {
         this.blocks.addAll(blocks);
     }
 

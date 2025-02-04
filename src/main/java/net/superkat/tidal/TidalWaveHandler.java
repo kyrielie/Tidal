@@ -1,17 +1,24 @@
 package net.superkat.tidal;
 
+import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.world.ClientWorld;
+import net.minecraft.fluid.FluidState;
 import net.minecraft.item.Items;
 import net.minecraft.particle.ParticleTypes;
+import net.minecraft.registry.tag.FluidTags;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.random.Random;
+import net.minecraft.world.chunk.WorldChunk;
+import net.superkat.tidal.config.TidalConfig;
 import net.superkat.tidal.water.Shoreline;
 import net.superkat.tidal.water.WaterBody;
 import net.superkat.tidal.water.WaterBodyHandler;
 
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -22,6 +29,8 @@ public class TidalWaveHandler {
     public final ClientWorld world;
     public WaterBodyHandler waterBodyHandler;
 
+    public boolean nearbyChunksLoaded = false;
+
     public int waveTicks = 0;
 
     public TidalWaveHandler(ClientWorld world) {
@@ -29,10 +38,33 @@ public class TidalWaveHandler {
         this.waterBodyHandler = new WaterBodyHandler(world, this);
     }
 
+    public void reloadNearbyChunks() {
+        this.nearbyChunksLoaded = false;
+    }
+
+    public boolean nearbyChunksLoaded(ClientPlayerEntity player, int horizontalDist) {
+        if(nearbyChunksLoaded) return true;
+        //this feels slightly cursed idk why
+        //using WorldChunk instead of chunk because it has "isEmpty" method
+        //could use chunk instanceof EmptyChunk instead, but this felt better idk why
+        BlockPos playerPos = player.getBlockPos();
+        List<WorldChunk> checkChunks = List.of(
+                world.getWorldChunk(playerPos.add(horizontalDist, 0, horizontalDist)),
+                world.getWorldChunk(playerPos.add(-horizontalDist, 0, horizontalDist)),
+                world.getWorldChunk(playerPos.add(-horizontalDist, 0, -horizontalDist)),
+                world.getWorldChunk(playerPos.add(horizontalDist, 0, -horizontalDist))
+        );
+        return checkChunks.stream().noneMatch(WorldChunk::isEmpty);
+    }
+
     public void tick() {
         MinecraftClient client = MinecraftClient.getInstance();
         ClientPlayerEntity player = client.player;
         assert player != null;
+
+        if(!this.nearbyChunksLoaded) {
+            this.nearbyChunksLoaded = nearbyChunksLoaded(player, TidalConfig.horizontalDistance);
+        }
 
         waterBodyHandler.tick();
         if(debugTick()) {
@@ -92,6 +124,31 @@ public class TidalWaveHandler {
         long time = MinecraftClient.getInstance().world.getTime();
         long random = 5L * Math.round(time / 5f); //math.ceil instead?
         return Random.create(random);
+    }
+
+    public static BlockPos topOfWater(ClientWorld world, BlockPos pos) {
+        BlockPos.Mutable mutable = pos.mutableCopy().move(Direction.UP);
+
+        while(posIsWater(world, mutable)) {
+            mutable.move(Direction.UP);
+        }
+        return mutable.move(Direction.DOWN);
+    }
+
+    /**
+     * Check if a BlockPos is water or is waterlogged
+     *
+     * @param world World to check in
+     * @param pos BlockPos to check
+     * @return If the BlockPos is water or waterlogged
+     */
+    public static boolean posIsWater(ClientWorld world, BlockPos pos) {
+        FluidState state = world.getFluidState(pos);
+        return state.isIn(FluidTags.WATER);
+    }
+
+    public static boolean stateIsWater(BlockState state) {
+        return state.getFluidState().isIn(FluidTags.WATER);
     }
 
 }
