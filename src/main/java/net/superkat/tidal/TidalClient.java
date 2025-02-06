@@ -1,12 +1,12 @@
 package net.superkat.tidal;
 
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientChunkEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientWorldEvents;
 import net.fabricmc.fabric.api.client.particle.v1.ParticleFactoryRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.InvalidateRenderStateCallback;
 import net.minecraft.client.MinecraftClient;
 import net.superkat.tidal.duck.TidalWorld;
-import net.superkat.tidal.event.ClientBlockUpdateEvent;
 import net.superkat.tidal.particles.debug.DebugShorelineParticle;
 import net.superkat.tidal.particles.debug.DebugWaterBodyParticle;
 
@@ -23,10 +23,24 @@ public class TidalClient implements ClientModInitializer {
             tidalWorld.tidal$tidalWaveHandler().reloadNearbyChunks();
         });
 
-        //Called when an individual block is updated(placed, broken, state changed, etc.)
-        ClientBlockUpdateEvent.BLOCK_UPDATE.register((pos, state) -> {
-//            System.out.println(state.getBlock().getName().toString() + ": " + pos.toShortString() + " (" + updates++ + ")");
+        ClientChunkEvents.CHUNK_LOAD.register((world, chunk) -> {
+            TidalWorld tidalWorld = (TidalWorld) world;
+            tidalWorld.tidal$tidalWaveHandler().waterBodyHandler.scheduleChunk(chunk);
         });
+
+        ClientChunkEvents.CHUNK_UNLOAD.register((world, chunk) -> {
+            TidalWorld tidalWorld = (TidalWorld) world;
+            tidalWorld.tidal$tidalWaveHandler().waterBodyHandler.removeChunk(chunk);
+        });
+
+        //Called when an individual block is updated(placed, broken, state changed, etc.)
+//        ClientBlockUpdateEvent.BLOCK_UPDATE.register((pos, state) -> {
+//            MinecraftClient client = MinecraftClient.getInstance();
+//            if(client.world == null || client.player == null) return;
+//            TidalWorld tidalWorld = (TidalWorld) client.world;
+//            tidalWorld.tidal$tidalWaveHandler().waterBodyHandler.updateBlock(pos, state);
+//            System.out.println(state.getBlock().getName().toString() + ": " + pos.toShortString() + " (" + updates++ + ")");
+//        });
 
         //Called when the chunks are reloaded(f3+a, resource pack change, etc.)
         InvalidateRenderStateCallback.EVENT.register(() -> {
@@ -35,8 +49,7 @@ public class TidalClient implements ClientModInitializer {
             if(client.world == null || client.player == null) return;
             TidalWorld tidalWorld = (TidalWorld) client.world;
             tidalWorld.tidal$tidalWaveHandler().reloadNearbyChunks();
-            tidalWorld.tidal$tidalWaveHandler().waterBodyHandler.clear();
-            tidalWorld.tidal$tidalWaveHandler().waterBodyHandler.build(client.player);
+            tidalWorld.tidal$tidalWaveHandler().waterBodyHandler.rebuild();
         });
 
 

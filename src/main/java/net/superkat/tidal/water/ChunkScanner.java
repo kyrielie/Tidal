@@ -1,13 +1,10 @@
 package net.superkat.tidal.water;
 
 import com.google.common.collect.Maps;
-import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.world.ClientWorld;
-import net.minecraft.sound.SoundEvents;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.ChunkSectionPos;
+import net.minecraft.util.math.ChunkPos;
 import net.minecraft.util.math.Direction;
-import net.minecraft.world.chunk.Chunk;
 import net.superkat.tidal.TidalWaveHandler;
 import org.apache.commons.compress.utils.Lists;
 
@@ -36,14 +33,14 @@ public class ChunkScanner {
 
     public final WaterBodyHandler handler;
     public final ClientWorld world;
-    public Chunk chunk;
+    public ChunkPos chunkPos;
     public boolean finished = false;
 
-    public ChunkScanner(WaterBodyHandler handler, ClientWorld world, Chunk chunk, int minY, int maxY) {
+    public ChunkScanner(WaterBodyHandler handler, ClientWorld world, ChunkPos chunkPos, int minY, int maxY) {
         this.handler = handler;
         this.world = world;
-        this.chunk = chunk;
-        BlockPos startPos = ChunkSectionPos.from(chunk).getMinPos().withY(minY);
+        this.chunkPos = chunkPos;
+        BlockPos startPos = chunkPos.getStartPos().withY(minY);
         BlockPos endPos = startPos.add(15, 0, 15).withY(maxY);
         this.cachedIterator = stack(startPos, endPos);
     }
@@ -56,8 +53,6 @@ public class ChunkScanner {
             BlockPos next = cachedIterator.next();
             scanPos(next.toImmutable());
         } else {
-            //debug
-            MinecraftClient.getInstance().player.playSound(SoundEvents.ITEM_TRIDENT_HIT_GROUND, 1f, 1f);
             markFinished();
         }
     }
@@ -127,7 +122,7 @@ public class ChunkScanner {
             Shoreline shoreline = new Shoreline().withBlocks(nonWaterBlocks);
             if (!handler.tryMergeShoreline(shoreline)) this.handler.shorelines.add(shoreline);
 
-            //can be removed?
+            //no water bodies should be created from non-water scanned pos
             //returning here to reduce the amount this check is called every so slightly
             if(!posIsWater) return;
         }

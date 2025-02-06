@@ -30,7 +30,6 @@ public class TidalWaveHandler {
     public WaterBodyHandler waterBodyHandler;
 
     public boolean nearbyChunksLoaded = false;
-
     public int waveTicks = 0;
 
     public TidalWaveHandler(ClientWorld world) {
@@ -42,17 +41,18 @@ public class TidalWaveHandler {
         this.nearbyChunksLoaded = false;
     }
 
-    public boolean nearbyChunksLoaded(ClientPlayerEntity player, int horizontalDist) {
+    public boolean nearbyChunksLoaded(ClientPlayerEntity player, int chunkRadius) {
         if(nearbyChunksLoaded) return true;
-        //this feels slightly cursed idk why
+        int radius = chunkRadius * 8;
+
         //using WorldChunk instead of chunk because it has "isEmpty" method
-        //could use chunk instanceof EmptyChunk instead, but this felt better idk why
+        //could use chunk instanceof EmptyChunk instead, but this felt better
         BlockPos playerPos = player.getBlockPos();
         List<WorldChunk> checkChunks = List.of(
-                world.getWorldChunk(playerPos.add(horizontalDist, 0, horizontalDist)),
-                world.getWorldChunk(playerPos.add(-horizontalDist, 0, horizontalDist)),
-                world.getWorldChunk(playerPos.add(-horizontalDist, 0, -horizontalDist)),
-                world.getWorldChunk(playerPos.add(horizontalDist, 0, -horizontalDist))
+                world.getWorldChunk(playerPos.add(radius, 0, radius)),
+                world.getWorldChunk(playerPos.add(-radius, 0, radius)),
+                world.getWorldChunk(playerPos.add(-radius, 0, -radius)),
+                world.getWorldChunk(playerPos.add(radius, 0, -radius))
         );
         return checkChunks.stream().noneMatch(WorldChunk::isEmpty);
     }
@@ -63,11 +63,15 @@ public class TidalWaveHandler {
         assert player != null;
 
         if(!this.nearbyChunksLoaded) {
-            this.nearbyChunksLoaded = nearbyChunksLoaded(player, TidalConfig.horizontalDistance);
+            this.nearbyChunksLoaded = nearbyChunksLoaded(player, TidalConfig.chunkRadius);
         }
 
         waterBodyHandler.tick();
-        if(debugTick()) {
+        debugTick(client, player);
+    }
+
+    public void debugTick(MinecraftClient client, ClientPlayerEntity player) {
+        if(shouldDebugTick()) {
             waveTicks++;
             Set<WaterBody> waterBodies = waterBodyHandler.waterBodies.stream().filter(waterBody -> waterBody.blocks.size() >= 10).collect(Collectors.toSet());
             if(waveTicks >= 20 && !waterBodyHandler.shorelines.isEmpty()) {
@@ -88,7 +92,7 @@ public class TidalWaveHandler {
         }
     }
 
-    public static boolean debugTick() {
+    public static boolean shouldDebugTick() {
         MinecraftClient client = MinecraftClient.getInstance();
         ClientPlayerEntity player = client.player;
         if(player.getActiveItem().isOf(Items.SPYGLASS) && player.getItemUseTime() >= 10) {
@@ -100,7 +104,7 @@ public class TidalWaveHandler {
         return false;
     }
 
-    public static boolean altDebugTick() {
+    public static boolean altShouldDebugTick() {
         MinecraftClient client = MinecraftClient.getInstance();
         ClientPlayerEntity player = client.player;
        if(player.getActiveItem().isOf(Items.SHIELD) && (player.getItemUseTime() == 1 || player.isSneaking())) {

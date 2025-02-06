@@ -57,6 +57,10 @@ public abstract class AbstractBlockSetTracker {
         this.blocks.addAll(blocks);
     }
 
+    public void addBlock(BlockPos pos) {
+        this.blocks.add(pos);
+    }
+
     public void removeBlock(BlockPos pos) {
         if(this.blocks.remove(pos)) {
             //speed up the time it'll take to delete itself as its more likely a mistake can happen
