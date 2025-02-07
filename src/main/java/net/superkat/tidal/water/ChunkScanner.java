@@ -5,6 +5,7 @@ import net.minecraft.client.world.ClientWorld;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.util.math.Direction;
+import net.minecraft.world.Heightmap;
 import net.superkat.tidal.TidalWaveHandler;
 import org.apache.commons.compress.utils.Lists;
 
@@ -36,12 +37,13 @@ public class ChunkScanner {
     public ChunkPos chunkPos;
     public boolean finished = false;
 
-    public ChunkScanner(WaterBodyHandler handler, ClientWorld world, ChunkPos chunkPos, int minY, int maxY) {
+    //TODO - scan above and below for water to jumps in the water
+    public ChunkScanner(WaterBodyHandler handler, ClientWorld world, ChunkPos chunkPos) {
         this.handler = handler;
         this.world = world;
         this.chunkPos = chunkPos;
-        BlockPos startPos = chunkPos.getStartPos().withY(minY);
-        BlockPos endPos = startPos.add(15, 0, 15).withY(maxY);
+        BlockPos startPos = chunkPos.getStartPos();
+        BlockPos endPos = startPos.add(15, 0, 15);
         this.cachedIterator = stack(startPos, endPos);
     }
 
@@ -51,7 +53,8 @@ public class ChunkScanner {
     public void tick() {
         if(cachedIterator.hasNext()) {
             BlockPos next = cachedIterator.next();
-            scanPos(next.toImmutable());
+            int y = this.world.getTopY(Heightmap.Type.WORLD_SURFACE, next.getX(), next.getZ());
+            scanPos(next.withY(y - 1));
         } else {
             markFinished();
         }
@@ -67,7 +70,7 @@ public class ChunkScanner {
 
     /**
      * Scan a block to be water or not water.
-     * <br><br>If water, the immediately surrounding neighbours in a "+" shape are also checked if they have already been scanned/cached, and are merged into a water body/shoreline(if already scanned/cached).
+     * <br><br>If not already visited, the immediately surrounding neighbors are also checked for water and cached in a "+" shape. The corners for a square are also scanned if the initial scanned pos is NOT water.
      *
      * @param pos Block pos to scan
      */

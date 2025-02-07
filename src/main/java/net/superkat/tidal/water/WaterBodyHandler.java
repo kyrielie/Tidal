@@ -5,7 +5,6 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.client.render.Camera;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.item.Items;
 import net.minecraft.particle.ParticleEffect;
@@ -62,6 +61,8 @@ public class WaterBodyHandler {
         }
 
         tickScheduledScanners(player);
+//        tickBlockSetTracker(this.waterBodies);
+//        tickBlockSetTracker(this.shorelines);
 
         debugTick(client, player);
     }
@@ -176,18 +177,18 @@ public class WaterBodyHandler {
      * easy method to clear & rebuild
      */
     public void rebuild() {
-        Camera camera = MinecraftClient.getInstance().gameRenderer.getCamera();
-        BlockPos playerPos = camera.getBlockPos();
-        int verticalRadius = TidalConfig.verticalRadius;
-        int playerY = playerPos.getY();
-        int minY = playerY - verticalRadius; //calc once here
-        int maxY = playerY + verticalRadius;
+//        Camera camera = MinecraftClient.getInstance().gameRenderer.getCamera();
+//        BlockPos playerPos = camera.getBlockPos();
+//        int verticalRadius = TidalConfig.verticalRadius;
+//        int playerY = playerPos.getY();
+//        int minY = playerY - verticalRadius; //calc once here
+//        int maxY = playerY + verticalRadius;
         this.clear(); //clear waterbodies and shorelines
 
         for (Map.Entry<Long, ChunkScanner> entry : this.scanners.sequencedEntrySet()) {
             ChunkPos chunkPos = new ChunkPos(entry.getKey());
             long pos = chunkPos.toLong();
-            this.scanners.put(pos, new ChunkScanner(this, this.world, chunkPos, minY, maxY));
+            this.scanners.put(pos, new ChunkScanner(this, this.world, chunkPos));
         }
 
         //TODO - remove waterbody/shorelines from unloaded chunks(split? loop through blocks to remove?)
@@ -226,34 +227,37 @@ public class WaterBodyHandler {
      * Schedules a chunk to be scanned(calculates y coords for you)
      *
      * @param chunk Chunk to schedule
-     * @see WaterBodyHandler#scheduleChunkScanner(ChunkPos, int, int)
+     * @see WaterBodyHandler#scheduleChunkScanner(ChunkPos)
      */
     public void scheduleChunk(Chunk chunk) {
-        Camera camera = MinecraftClient.getInstance().gameRenderer.getCamera();
-        BlockPos playerPos = camera.getBlockPos();
-        int verticalRadius = TidalConfig.verticalRadius;
-        int playerY = playerPos.getY();
-        int minY = playerY - verticalRadius; //calc once here
-        int maxY = playerY + verticalRadius;
-        scheduleChunkScanner(chunk.getPos(), minY, maxY);
+//        Camera camera = MinecraftClient.getInstance().gameRenderer.getCamera();
+//        BlockPos playerPos = camera.getBlockPos();
+//        int verticalRadius = TidalConfig.verticalRadius;
+//        int playerY = playerPos.getY();
+//        int minY = playerY - verticalRadius; //calc once here
+//        int maxY = playerY + verticalRadius;
+        scheduleChunkScanner(chunk.getPos());
     }
 
     /**
      * Schedules a chunk to be scanned
      *
      * @param chunkPos ChunkPos of the chunk to be scanned
-     * @param minY The minimum y coordinate of the scan
-     * @param maxY The maximum y coordinate of the scan
-     *
      * @see WaterBodyHandler#scheduleChunk(Chunk)
      */
-    public void scheduleChunkScanner(ChunkPos chunkPos, int minY, int maxY) {
+    public void scheduleChunkScanner(ChunkPos chunkPos) {
         long pos = chunkPos.toLong();
-        this.scanners.computeIfAbsent(pos, pos1 -> new ChunkScanner(this, this.world, chunkPos, minY, maxY));
+        this.scanners.computeIfAbsent(pos, pos1 -> new ChunkScanner(this, this.world, chunkPos));
     }
 
     public void removeChunk(Chunk chunk) {
         ChunkPos pos = chunk.getPos();
+        this.waterBodies.forEach(waterBody -> {
+            waterBody.removeChunkBlocks(chunk);
+        });
+        this.shorelines.forEach(shoreline -> {
+            shoreline.removeChunkBlocks(chunk);
+        });
         this.scanners.remove(pos.toLong());
     }
 

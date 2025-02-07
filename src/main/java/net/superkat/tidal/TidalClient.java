@@ -51,7 +51,5 @@ public class TidalClient implements ClientModInitializer {
             tidalWorld.tidal$tidalWaveHandler().reloadNearbyChunks();
             tidalWorld.tidal$tidalWaveHandler().waterBodyHandler.rebuild();
         });
-
-
     }
 }

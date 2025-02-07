@@ -1,10 +1,9 @@
 package net.superkat.tidal.water;
 
-import com.google.common.collect.Sets;
-import net.minecraft.client.world.ClientWorld;
-import net.minecraft.registry.tag.FluidTags;
+import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3i;
+import net.minecraft.world.chunk.Chunk;
 import net.superkat.tidal.TidalWaveHandler;
 
 import java.util.Collection;
@@ -14,7 +13,7 @@ import java.util.Set;
  * Class which contains a Set of BlockPos', and ticking functionality. Includes general methods beyond that.
  */
 public abstract class AbstractBlockSetTracker {
-    public Set<BlockPos> blocks = Sets.newHashSet();
+    public Set<BlockPos> blocks = new ObjectOpenHashSet<>();
     public int tick = 0;
 
     public AbstractBlockSetTracker withBlocks(Collection<BlockPos> blocks) {
@@ -45,7 +44,8 @@ public abstract class AbstractBlockSetTracker {
     }
 
     public boolean shouldRemove() {
-        return this.tick >= 6000; //5 minutes
+        return false;
+//        return this.tick >= 6000; //5 minutes
 //        return this.tick >= 1000;
     }
 
@@ -68,7 +68,13 @@ public abstract class AbstractBlockSetTracker {
         }
     }
 
-    public boolean posIsWater(ClientWorld world, BlockPos pos) {
-        return world.getFluidState(pos).isIn(FluidTags.WATER);
+
+    /**
+     * Iterate through a chunk's blocks, checking only the x and z coords and ignoring the y coord
+     *
+     * @param chunk The chunk whose blocks should be removed from this tracker.
+     */
+    public void removeChunkBlocks(Chunk chunk) {
+
     }
 }
