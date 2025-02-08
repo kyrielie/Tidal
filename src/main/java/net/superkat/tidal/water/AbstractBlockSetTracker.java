@@ -18,7 +18,6 @@ import java.util.stream.Collectors;
  * Note: there is no real reason for this to not be abstract and replace WaterBody and Shoreline, other than naming and keeping things organized in a way I can understand easier
  */
 public abstract class AbstractBlockSetTracker {
-//    public Set<BlockPos> blocks = new ObjectOpenHashSet<>();
     public Long2ReferenceArrayMap<ObjectOpenHashSet<BlockPos>> chunkedBlocks = new Long2ReferenceArrayMap<>();
     public int tick = 0;
 
@@ -51,7 +50,6 @@ public abstract class AbstractBlockSetTracker {
     }
 
     public Set<BlockPos> getBlocks() {
-//        return this.blocks;
         return this.chunkedBlocks.values().stream().flatMap(Collection::stream).collect(Collectors.toSet());
     }
 
@@ -71,9 +69,6 @@ public abstract class AbstractBlockSetTracker {
     }
 
     public void addBlock(BlockPos pos) {
-//        blocks.add(pos);
-//        test.put(new ChunkPos(pos).toLong(), pos);
-//        test.getOrDefault(new ChunkPos(pos).toLong(), new ObjectOpenHashSet<>()).add(pos);
         this.getBlockSet(pos).add(pos);
     }
 
@@ -101,8 +96,6 @@ public abstract class AbstractBlockSetTracker {
      */
     public void removeChunkBlocks(Chunk chunk) {
         long chunkPosL = chunk.getPos().toLong();
-//        List<BlockPos> chunksBlocks = this.blocks.stream().filter(pos -> new ChunkPos(pos).toLong() == chunkPosL).toList();
-//        chunksBlocks.forEach(this.blocks::remove);
         this.chunkedBlocks.remove(chunkPosL);
     }
 }

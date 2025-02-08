@@ -48,6 +48,8 @@ public class WaterBodyHandler {
     //boolean for if the initial joining/chunk reloading build is finished or not
     public boolean built = false;
 
+    //TODO - get all nearby loaded chunks to allow for scanners to have chunk scanners removed to save memory
+    //TODO - block updates?
     public WaterBodyHandler(ClientWorld world, TidalWaveHandler tidalWaveHandler) {
         this.world = world;
         this.tidalWaveHandler = tidalWaveHandler;
@@ -156,21 +158,24 @@ public class WaterBodyHandler {
      * @return If the build was successful
      */
     public boolean build() {
-        long timeStart = Util.getMeasuringTimeMs();
-//        BlockPos playerPos = MinecraftClient.getInstance().gameRenderer.getCamera().getBlockPos();
-//        int chunkRadius = TidalConfig.chunkRadius;
+        long overallStartTime = Util.getMeasuringTimeMs();
+        Tidal.LOGGER.info("-=+=========================+=-");
+
         for (ChunkScanner scanner : this.scanners.values()) {
             if(scanner == null) continue;
-//            if(!scannerInDistance(playerPos, scanner.chunkPos.toLong(), chunkRadius)) continue;
+            long scannerStartTime = Util.getMeasuringTimeMs();
             while (!scanner.isFinished()) {
                 scanner.tick();
                 if(scanner.isFinished()) {
                     scanners.put(scanner.chunkPos.toLong(), null);
                     MinecraftClient.getInstance().player.playSound(SoundEvents.ITEM_TRIDENT_HIT_GROUND, 1f, 1f);
+//                    Tidal.LOGGER.info("Scanner time: {} ms", Util.getMeasuringTimeMs() - scannerStartTime);
                 }
             }
         }
-        Tidal.LOGGER.info("Chunk scanner time: {} ms", Util.getMeasuringTimeMs() - timeStart);
+
+        Tidal.LOGGER.info("Total Chunk Builder time: {} ms", Util.getMeasuringTimeMs() - overallStartTime);
+        Tidal.LOGGER.info("-=+=========================+=-");
 
         return true;
     }
@@ -179,12 +184,6 @@ public class WaterBodyHandler {
      * easy method to clear & rebuild
      */
     public void rebuild() {
-//        Camera camera = MinecraftClient.getInstance().gameRenderer.getCamera();
-//        BlockPos playerPos = camera.getBlockPos();
-//        int verticalRadius = TidalConfig.verticalRadius;
-//        int playerY = playerPos.getY();
-//        int minY = playerY - verticalRadius; //calc once here
-//        int maxY = playerY + verticalRadius;
         this.clear(); //clear waterbodies and shorelines
 
         for (Map.Entry<Long, ChunkScanner> entry : this.scanners.sequencedEntrySet()) {
@@ -211,7 +210,6 @@ public class WaterBodyHandler {
             if(scanner.isFinished()) {
                 scanners.put(chunkPosL, null);
                 MinecraftClient.getInstance().player.playSound(SoundEvents.ITEM_TRIDENT_HIT_GROUND, 1f, 1f);
-//                scanners.remove(chunkPosL);
             }
         }
     }
@@ -231,12 +229,6 @@ public class WaterBodyHandler {
      * @see WaterBodyHandler#scheduleChunkScanner(ChunkPos)
      */
     public void scheduleChunk(Chunk chunk) {
-//        Camera camera = MinecraftClient.getInstance().gameRenderer.getCamera();
-//        BlockPos playerPos = camera.getBlockPos();
-//        int verticalRadius = TidalConfig.verticalRadius;
-//        int playerY = playerPos.getY();
-//        int minY = playerY - verticalRadius; //calc once here
-//        int maxY = playerY + verticalRadius;
         scheduleChunkScanner(chunk.getPos());
     }
 
