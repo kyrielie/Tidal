@@ -1,7 +1,7 @@
 package net.superkat.tidal.water;
 
-import com.google.common.collect.Sets;
 import it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongSet;
 import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
@@ -15,7 +15,6 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.chunk.Chunk;
-import net.minecraft.world.chunk.WorldChunk;
 import net.superkat.tidal.Tidal;
 import net.superkat.tidal.TidalWaveHandler;
 import net.superkat.tidal.config.TidalConfig;
@@ -24,6 +23,7 @@ import net.superkat.tidal.particles.debug.DebugWaterBodyParticle;
 import org.jetbrains.annotations.Nullable;
 
 import java.awt.*;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
@@ -40,9 +40,11 @@ public class WaterBodyHandler {
     //stol... inspired by BiomeColorCache
     //The long is a chunkpos, with a scanner being attributed to it (i have no clue what anything means but ok)
     public Long2ObjectLinkedOpenHashMap<ChunkScanner> scanners = new Long2ObjectLinkedOpenHashMap<>(256, 0.25f);
+
     //using fastutils because... it has fast in its name? I've been told its fast! And I gotta go fast!
     public Set<WaterBody> waterBodies = new ReferenceOpenHashSet<>();
     public Set<Shoreline> shorelines = new ReferenceOpenHashSet<>();
+
     //boolean for if the initial joining/chunk reloading build is finished or not
     public boolean built = false;
 
@@ -79,7 +81,7 @@ public class WaterBodyHandler {
         for (AbstractBlockSetTracker tracker : trackers) {
             Color color = debugColor(i, trackers.size());
             i++;
-            tracker.blocks.forEach(blockPos -> {
+            tracker.getBlocks().forEach(blockPos -> {
                 Vec3d pos = blockPos.toCenterPos();
                 ParticleEffect particleEffect = waterBodyParticle ? new DebugWaterBodyParticle.DebugWaterBodyParticleEffect(Vec3d.unpackRgb(color.getRGB()).toVector3f(), 1f)
                         : new DebugShorelineParticle.DebugShorelineParticleEffect(Vec3d.unpackRgb(color.getRGB()).toVector3f(), 1f);
@@ -191,7 +193,6 @@ public class WaterBodyHandler {
             this.scanners.put(pos, new ChunkScanner(this, this.world, chunkPos));
         }
 
-        //TODO - remove waterbody/shorelines from unloaded chunks(split? loop through blocks to remove?)
         this.built = build();
     }
 
@@ -261,23 +262,6 @@ public class WaterBodyHandler {
         this.scanners.remove(pos.toLong());
     }
 
-    public Set<WorldChunk> getNearbyChunks(ClientPlayerEntity player, int chunkRadius) {
-        ClientWorld world = player.clientWorld;
-        BlockPos playerPos = player.getBlockPos();
-        Set<WorldChunk> chunks = Sets.newHashSet();
-        int radius = chunkRadius * 8;
-
-        ChunkPos start = new ChunkPos(playerPos.add(-radius, 0, -radius));
-        ChunkPos end = new ChunkPos(playerPos.add(radius, 0, radius));
-
-        for (ChunkPos pos : ChunkPos.stream(start, end).toList()) {
-            WorldChunk chunk = world.getChunkManager().getWorldChunk(pos.x, pos.z);
-            chunks.add(chunk);
-        }
-
-        return chunks;
-    }
-
     public void tickBlockSetTracker(Set<? extends AbstractBlockSetTracker> set) {
         Iterator<? extends AbstractBlockSetTracker> iterator = set.iterator();
         while (iterator.hasNext()) {
@@ -329,23 +313,41 @@ public class WaterBodyHandler {
      * @return The set of water bodies that share any amount of BlockPos positions with the given water body
      */
     public Set<WaterBody> waterBodiesInAnother(WaterBody waterBody) {
-        return waterBodies.stream().filter(checkedWater -> waterBody.blocks.stream().anyMatch(pos -> checkedWater.blocks.contains(pos)))
+        LongSet chunkPosLs = waterBody.chunkedBlocks.keySet();
+        if(chunkPosLs.isEmpty()) return Collections.emptySet();
+        return waterBodies.stream()
+                .filter(checkedWater -> chunkPosLs.longStream()
+                    .anyMatch(chunkPosL -> checkedWater.chunkedBlocks.keySet().contains(chunkPosL)))
                 .collect(Collectors.toSet());
     }
 
     public Set<Shoreline> shorelinesInAnother(Shoreline shoreline) {
-        return shorelines.stream().filter(checkedShore -> shoreline.blocks.stream().anyMatch(pos -> checkedShore.blocks.contains(pos)))
+        LongSet chunkPosLs = shoreline.chunkedBlocks.keySet();
+        if(chunkPosLs.isEmpty()) return Collections.emptySet();
+        return shorelines.stream()
+                .filter(checkedShore -> chunkPosLs.longStream()
+                        .anyMatch(chunkPosL -> checkedShore.chunkedBlocks.keySet().contains(chunkPosL)))
                 .collect(Collectors.toSet());
     }
 
     @Nullable
     public WaterBody posInWaterBody(BlockPos pos) {
-        return waterBodies.stream().filter(waterBody -> waterBody.blocks.contains(pos)).findAny().orElse(null);
+        long chunkPosL = new ChunkPos(pos).toLong();
+        return waterBodies.stream()
+                .filter(waterBody -> waterBody.chunkedBlocks.keySet().contains(chunkPosL)
+                        && waterBody.chunkedBlocks.get(chunkPosL).contains(pos))
+                .findAny()
+                .orElse(null);
     }
 
     @Nullable
     public Shoreline posInShoreline(BlockPos pos) {
-        return shorelines.stream().filter(shoreline -> shoreline.blocks.contains(pos)).findAny().orElse(null);
+        long chunkPosL = new ChunkPos(pos).toLong();
+        return shorelines.stream()
+                .filter(shoreline -> shoreline.chunkedBlocks.keySet().contains(chunkPosL)
+                        && shoreline.chunkedBlocks.get(chunkPosL).contains(pos))
+                .findAny()
+                .orElse(null);
     }
 
     /**
@@ -355,14 +357,19 @@ public class WaterBodyHandler {
      * @param pos The BlockPos to be removed
      */
     public void removePosFromWaterBodies(BlockPos pos) {
+        long chunkPosL = new ChunkPos(pos).toLong();
         for (WaterBody waterBody : waterBodies) {
-            waterBody.removeBlock(pos);
+            //don't want to call getBlockSet without it containing it since it computes the chunk value if missing
+            if(!waterBody.chunkedBlocks.containsKey(chunkPosL)) continue;
+            waterBody.getBlockSet(pos).remove(pos);
         }
     }
 
     public void removePosFromShorelines(BlockPos pos) {
+        long chunkPosL = new ChunkPos(pos).toLong();
         for (Shoreline shoreline : shorelines) {
-            shoreline.removeBlock(pos);
+            if(!shoreline.chunkedBlocks.containsKey(chunkPosL)) continue;
+            shoreline.getBlockSet(pos).remove(pos);
         }
     }
 

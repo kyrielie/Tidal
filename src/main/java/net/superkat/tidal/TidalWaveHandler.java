@@ -73,7 +73,7 @@ public class TidalWaveHandler {
     public void debugTick(MinecraftClient client, ClientPlayerEntity player) {
         if(shouldDebugTick()) {
             waveTicks++;
-            Set<WaterBody> waterBodies = waterBodyHandler.waterBodies.stream().filter(waterBody -> waterBody.blocks.size() >= 10).collect(Collectors.toSet());
+            Set<WaterBody> waterBodies = waterBodyHandler.waterBodies.stream().filter(waterBody -> waterBody.getBlocks().size() >= 10).collect(Collectors.toSet());
             if(waveTicks >= 20 && !waterBodyHandler.shorelines.isEmpty()) {
                 for (WaterBody waterBody : waterBodies) {
                     BlockPos spawnPos = waterBody.randomPos();

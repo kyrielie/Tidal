@@ -123,7 +123,7 @@ public class ChunkScanner {
             //water has to be next to the shoreline
             if(waterBlocks.isEmpty()) return;
             Shoreline shoreline = new Shoreline().withBlocks(nonWaterBlocks);
-            if (!handler.tryMergeShoreline(shoreline)) this.handler.shorelines.add(shoreline);
+            if (!shoreline.getBlocks().isEmpty() && !handler.tryMergeShoreline(shoreline)) this.handler.shorelines.add(shoreline);
 
             //no water bodies should be created from non-water scanned pos
             //returning here to reduce the amount this check is called every so slightly
@@ -131,7 +131,7 @@ public class ChunkScanner {
         }
 
         WaterBody waterBody = new WaterBody().withBlocks(waterBlocks);
-        if(handler.tryMergeWaterBody(waterBody)) return;
+        if(waterBody.getBlocks().isEmpty() || handler.tryMergeWaterBody(waterBody)) return;
         this.handler.waterBodies.add(waterBody);
     }
 
