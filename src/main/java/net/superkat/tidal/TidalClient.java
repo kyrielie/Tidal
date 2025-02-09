@@ -7,6 +7,7 @@ import net.fabricmc.fabric.api.client.particle.v1.ParticleFactoryRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.InvalidateRenderStateCallback;
 import net.minecraft.client.MinecraftClient;
 import net.superkat.tidal.duck.TidalWorld;
+import net.superkat.tidal.event.ClientBlockUpdateEvent;
 import net.superkat.tidal.particles.debug.DebugShorelineParticle;
 import net.superkat.tidal.particles.debug.DebugWaterBodyParticle;
 
@@ -34,13 +35,12 @@ public class TidalClient implements ClientModInitializer {
         });
 
         //Called when an individual block is updated(placed, broken, state changed, etc.)
-//        ClientBlockUpdateEvent.BLOCK_UPDATE.register((pos, state) -> {
-//            MinecraftClient client = MinecraftClient.getInstance();
-//            if(client.world == null || client.player == null) return;
-//            TidalWorld tidalWorld = (TidalWorld) client.world;
-//            tidalWorld.tidal$tidalWaveHandler().waterBodyHandler.updateBlock(pos, state);
-//            System.out.println(state.getBlock().getName().toString() + ": " + pos.toShortString() + " (" + updates++ + ")");
-//        });
+        ClientBlockUpdateEvent.BLOCK_UPDATE.register((pos, state) -> {
+            MinecraftClient client = MinecraftClient.getInstance();
+            if(client.world == null || client.player == null) return;
+            TidalWorld tidalWorld = (TidalWorld) client.world;
+            tidalWorld.tidal$tidalWaveHandler().waterBodyHandler.updateBlock(pos, state);
+        });
 
         //Called when the chunks are reloaded(f3+a, resource pack change, etc.)
         InvalidateRenderStateCallback.EVENT.register(() -> {

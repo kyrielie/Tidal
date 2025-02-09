@@ -1,6 +1,7 @@
 package net.superkat.tidal.water;
 
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
@@ -12,9 +13,11 @@ import org.apache.commons.compress.utils.Lists;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Scans a chunk to create a list of created water bodies and shorelines
+ * @see WaterBodyHandler
  * @see WaterBody
  * @see Shoreline
  */
@@ -22,13 +25,8 @@ public class ChunkScanner {
     //blocks which have been checked to be water or not water
     public Map<BlockPos, Boolean> cachedBlocks = new Object2ObjectOpenHashMap<>();
 
-    //According to this thing I found on the interwebs of the Internet (https://www.geeksforgeeks.org/difference-between-hashmap-and-hashset/)
-    //the Map is better here speed-wise, despite storing an extra value for everything
-    //the Internet would never lie, right?
-    //(the boolean for visitedBlocks isn't really used, because cachedBlocks gets used instead)
-
     //blocks which have had their neighbours checked(scanned) as water or not water, and added to water body/shoreline
-    public Map<BlockPos, Boolean> visitedBlocks = new Object2ObjectOpenHashMap<>();
+    public Set<BlockPos> visitedBlocks = new ObjectOpenHashSet<>();
 
     public Iterator<BlockPos> cachedIterator = null;
 
@@ -76,17 +74,12 @@ public class ChunkScanner {
      */
     public void scanPos(BlockPos pos) {
         //if already visited or is air -> return
-        if(visitedBlocks.containsKey(pos)) return;
+        if(visitedBlocks.contains(pos)) return;
         if(world.isAir(pos)) return;
 
         //mark visited
         boolean posIsWater = cacheAndIsWater(pos);
-        visitedBlocks.put(pos, posIsWater);
-
-//        if(posIsWater) { //check if top of water
-//            boolean topOfWater = isTopOfWater(pos);
-//            if(!topOfWater) return;
-//        }
+        visitedBlocks.add(pos);
 
         //block is either the top of water, or a different non-air block
         //shorelines need to be checked for still
@@ -100,7 +93,6 @@ public class ChunkScanner {
             boolean neighborIsWater = cacheAndIsWater(checkPos);
             //that is super cursed but okay - no that's actually incredibly cursed(wow I spelt that right first try)
             //if init scan pos is water OR if the check pos is the top of water
-//            if(neighborIsWater && (posIsWater || isTopOfWater(checkPos))) waterBlocks.add(checkPos);
             if(neighborIsWater) waterBlocks.add(checkPos);
             else nonWaterBlocks.add(checkPos);
         }
@@ -113,7 +105,6 @@ public class ChunkScanner {
             for (BlockPos cornerPos : corners) {
                 if(world.isAir(cornerPos)) continue;
                 boolean cornerIsWater = cacheAndIsWater(cornerPos);
-//                if(cornerIsWater && (isTopOfWater(cornerPos))) waterBlocks.add(cornerPos);
                 if(cornerIsWater) waterBlocks.add(cornerPos);
                 else nonWaterBlocks.add(cornerPos);
             }
@@ -143,11 +134,6 @@ public class ChunkScanner {
      */
     public boolean cacheAndIsWater(BlockPos pos) {
         return cachedBlocks.computeIfAbsent(pos, pos1 -> TidalWaveHandler.posIsWater(world, pos1));
-    }
-
-    public boolean isTopOfWater(BlockPos pos) {
-        //checking for air seems to help performance a LOT, and also makes more sense
-        return world.isAir(pos.offset(Direction.UP));
     }
 
     public void markFinished() {

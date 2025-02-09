@@ -1,8 +1,10 @@
 package net.superkat.tidal.water;
 
+import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
+import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.world.ClientWorld;
@@ -24,15 +26,26 @@ import org.jetbrains.annotations.Nullable;
 
 import java.awt.*;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Used to handle(find/create, merge, delete) and tick water bodies
+ * Used to handle(find/create, merge, delete) and tick water bodies.
+ * <br><br>
+ * How this goofy thing works: <br>
+ * The {@link WaterBodyHandler#scanners} holds a map of {@link ChunkPos} as longs & {@link ChunkScanner}, making each scanner linked to a ChunkPos.<br><br>
+ * {@link WaterBodyHandler#scheduleChunkScanner(ChunkPos)} schedules a chunk scanner, <b>called once a chunk is loaded</b>, which will begin ticking in the {@link WaterBodyHandler#tickScheduledScanners(ClientPlayerEntity)} method. Each scanner gets ticked 10 times per client tick, which was done to reduce the amount of lag per chunk load(instead of scanning the entire chunk during chunk load). <br><br>
+ * A ChunkScanner scans a single chunk, creating WaterBodies and Shorelines which get added here upon their creation(in their tick method).<br><br>
+ * Once the ChunkScanner is finished, its value in the scanners map <b>is set to null</b>, meaning the <b>ChunkPos long key still exists</b>. This was done to allow for all chunk scanners, water bodies, & shorelines, to be reset without missing any chunks.<br><br>
+ * The idea behind this was that ChunkPos's are added to the scanners map upon a chunk being loaded. The keys(ChunkPos longs) in the scanners map are used during the {@link WaterBodyHandler#rebuild()} method to setup ChunkScanners for all the chunks. If it was removed, getting all loaded chunks is surprisingly difficult, as there is no accessible method. I decided instead of using mixins/access wideners to get it, I would do this instead.<br><br>
+ * Scanning a specific radius of nearby chunks could cause some already loaded chunks(which would have been removed from the scanners map) to be missed, as they would not call the load chunk event. Even though they would be far away initially, moving toward them would be very noticeable. Note: client render distance doesn't always equal server render distance, and it isn't possible to get the server render distance on the client without an AW.<br><br>
+ * A ChunkPos(as a long) is removed from the scanners when that chunk is unloaded. Each WaterBody/Shoreline has their own method which removes the blocks associated with that ChunkPos.<br><br>
+ * ChunkPos' are updated and rescanned after a configurable amount of block updates within that chunk.
  *
  * @see TidalWaveHandler
+ * @see ChunkScanner
+ * @see AbstractBlockSetTracker
  */
 public class WaterBodyHandler {
     public final TidalWaveHandler tidalWaveHandler;
@@ -40,6 +53,9 @@ public class WaterBodyHandler {
     //stol... inspired by BiomeColorCache
     //The long is a chunkpos, with a scanner being attributed to it (i have no clue what anything means but ok)
     public Long2ObjectLinkedOpenHashMap<ChunkScanner> scanners = new Long2ObjectLinkedOpenHashMap<>(256, 0.25f);
+
+    //Keep track of how many block updates have happened in a chunk - used to rescan chunks after enough updates
+    public Long2IntOpenHashMap chunkUpdates = new Long2IntOpenHashMap(256, 0.25f);
 
     //using fastutils because... it has fast in its name? I've been told its fast! And I gotta go fast!
     public Set<WaterBody> waterBodies = new ReferenceOpenHashSet<>();
@@ -49,7 +65,6 @@ public class WaterBodyHandler {
     public boolean built = false;
 
     //TODO - get all nearby loaded chunks to allow for scanners to have chunk scanners removed to save memory
-    //TODO - block updates?
     public WaterBodyHandler(ClientWorld world, TidalWaveHandler tidalWaveHandler) {
         this.world = world;
         this.tidalWaveHandler = tidalWaveHandler;
@@ -65,9 +80,6 @@ public class WaterBodyHandler {
         }
 
         tickScheduledScanners(player);
-//        tickBlockSetTracker(this.waterBodies);
-//        tickBlockSetTracker(this.shorelines);
-
         debugTick(client, player);
     }
 
@@ -113,44 +125,57 @@ public class WaterBodyHandler {
         return Math.max(color, 0); //wow intellij really smart
     }
 
-//    public void updateBlock(BlockPos pos, BlockState state) {
-//        boolean isAir = world.isAir(pos);
+    public void updateBlock(BlockPos pos, BlockState state) {
+        long chunkPosL = new ChunkPos(pos).toLong();
+        int currentUpdates = this.chunkUpdates.getOrDefault(chunkPosL, 0) + 1;
+        if(currentUpdates >= TidalConfig.chunkUpdatesRescanAmount) {
+            if(this.rescheduleChunkScanner(new ChunkPos(chunkPosL))) {
+                currentUpdates = 0;
+            }
+        }
+        this.chunkUpdates.put(chunkPosL, currentUpdates);
+
+//        boolean isAir = state.isAir();
 //        boolean isWater = TidalWaveHandler.stateIsWater(state);
-//
 //        Shoreline shoreline = posInShoreline(pos);
-//        //don't check waterbody if shoreline has already been found
-//        WaterBody waterBody = shoreline == null ? posInWaterBody(pos) : null;
 //
-//        //pos is in either a shoreline or waterbody
-//        if(shoreline != null || waterBody != null) {
-//            if(isAir) {
-//                if(shoreline != null) shoreline.removeBlock(pos);
-//                else waterBody.removeBlock(pos);
-//            } else {
-//                if(isWater && shoreline != null) shoreline.removeBlock(pos);
-//                else if(!isWater && waterBody != null) waterBody.removeBlock(pos);
-//            }
-//        } else {
-//            //pos is not in a shoreline or waterbody - shouldn't be air
-//            if(isAir) return;
+//        if(shoreline != null) {
+//            if(isWater || isAir) shoreline.removeBlock(pos);
+//            if(!isWater) return;
+//        }
+//
+//        //try to add block to nearby waterbody
+//        //this would have been in the (shoreline != null) statement, but moved here as this would not
+//        //have been called if the pos was not water(which is when it should be called)
+//        if(isWater) {
 //            for (Direction direction : Direction.Type.HORIZONTAL) {
-//                BlockPos neighbor = pos.offset(direction);
-//                boolean neighborIsWater = TidalWaveHandler.posIsWater(this.world, neighbor);
-//                //checking for same type - cursed if statements I'm getting lazy now oh my i'm washed up
-//                if(isWater && neighborIsWater) {
-//                    WaterBody neighborWater = posInWaterBody(neighbor);
-//                    if(neighborWater == null) continue;
-//                    neighborWater.addBlock(pos);
-//                    return;
-//                } else if (!isWater && !neighborIsWater) {
-//                    Shoreline neighborShore = posInShoreline(neighbor);
-//                    if(neighborShore == null) continue;
-//                    neighborShore.addBlock(pos);
-//                    return;
-//                }
+//                BlockPos neighbour = pos.offset(direction);
+//                if(world.isAir(neighbour)) continue;
+//                if(!TidalWaveHandler.posIsWater(this.world, neighbour)) continue;
+//
+//                WaterBody neighbourWaterBody = posInWaterBody(neighbour);
+//                if(neighbourWaterBody == null) continue;
+//                neighbourWaterBody.addBlock(pos); return;
 //            }
 //        }
-//    }
+//
+//        WaterBody waterBody = posInWaterBody(pos);
+//        if(waterBody != null) {
+//            if(!isWater || isAir) waterBody.removeBlock(pos);
+//            if(isWater) return;
+//
+//            //try to add block to nearby shoreline
+//            for (Direction direction : Direction.Type.HORIZONTAL) {
+//                BlockPos neighbour = pos.offset(direction);
+//                if(world.isAir(neighbour)) continue;
+//                if(TidalWaveHandler.posIsWater(this.world, neighbour)) continue;
+//
+//                Shoreline neighbourShoreline = posInShoreline(neighbour);
+//                if(neighbourShoreline == null) continue;
+//                neighbourShoreline.addBlock(pos); return;
+//            }
+//        }
+    }
 
     /**
      * Builds all the chunk scanners available to be built(within config range).
@@ -163,12 +188,12 @@ public class WaterBodyHandler {
 
         for (ChunkScanner scanner : this.scanners.values()) {
             if(scanner == null) continue;
-            long scannerStartTime = Util.getMeasuringTimeMs();
+//            long scannerStartTime = Util.getMeasuringTimeMs();
             while (!scanner.isFinished()) {
                 scanner.tick();
                 if(scanner.isFinished()) {
                     scanners.put(scanner.chunkPos.toLong(), null);
-                    MinecraftClient.getInstance().player.playSound(SoundEvents.ITEM_TRIDENT_HIT_GROUND, 1f, 1f);
+                    MinecraftClient.getInstance().player.playSound(SoundEvents.ITEM_TRIDENT_HIT_GROUND, 0.1f, 1f);
 //                    Tidal.LOGGER.info("Scanner time: {} ms", Util.getMeasuringTimeMs() - scannerStartTime);
                 }
             }
@@ -243,27 +268,34 @@ public class WaterBodyHandler {
         this.scanners.computeIfAbsent(pos, pos1 -> new ChunkScanner(this, this.world, chunkPos));
     }
 
-    public void removeChunk(Chunk chunk) {
-        ChunkPos pos = chunk.getPos();
-        this.waterBodies.forEach(waterBody -> {
-            waterBody.removeChunkBlocks(chunk);
-        });
-        this.shorelines.forEach(shoreline -> {
-            shoreline.removeChunkBlocks(chunk);
-        });
-        this.scanners.remove(pos.toLong());
+    /**
+     * Schedules a ChunkPos to be rescanned, removing blocks in the chunk from waterbodies and shorelines in the process.
+     *
+     * @param chunkPos ChunkPos to remove
+     * @return If the reschedule was successful. It will return false if a scanner is already associated with the ChunkPos
+     */
+    public boolean rescheduleChunkScanner(ChunkPos chunkPos) {
+        long pos = chunkPos.toLong();
+        if (this.scanners.get(pos) != null) return false;
+        this.scanners.put(pos, new ChunkScanner(this, this.world, chunkPos));
+        this.removeChunkFromTrackers(pos);
+        return true;
     }
 
-    public void tickBlockSetTracker(Set<? extends AbstractBlockSetTracker> set) {
-        Iterator<? extends AbstractBlockSetTracker> iterator = set.iterator();
-        while (iterator.hasNext()) {
-            AbstractBlockSetTracker tracker = iterator.next();
-            tracker.tick();
-            if(tracker.shouldRemove()) {
-                //occasionally remove water bodies/shorelines to clear up mistakes in block removing and other jank
-                iterator.remove();
-            }
-        }
+    public void removeChunk(Chunk chunk) {
+        long chunkPosL = chunk.getPos().toLong();
+        this.removeChunkFromTrackers(chunkPosL);
+        this.chunkUpdates.remove(chunkPosL);
+        this.scanners.remove(chunkPosL);
+    }
+
+    public void removeChunkFromTrackers(long chunkPosL) {
+        this.waterBodies.forEach(waterBody -> {
+            waterBody.removeChunkBlocks(chunkPosL);
+        });
+        this.shorelines.forEach(shoreline -> {
+            shoreline.removeChunkBlocks(chunkPosL);
+        });
     }
 
     /**
@@ -344,8 +376,6 @@ public class WaterBodyHandler {
 
     /**
      * Remove a BlockPos from all water bodies.
-     * <br><br>
-     * {@link AbstractBlockSetTracker#removeBlock(BlockPos)} is called to allow its tick value to be increased, making it get deleted sooner to fix any possible changed block jank
      * @param pos The BlockPos to be removed
      */
     public void removePosFromWaterBodies(BlockPos pos) {
