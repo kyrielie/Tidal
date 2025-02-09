@@ -134,47 +134,6 @@ public class WaterBodyHandler {
             }
         }
         this.chunkUpdates.put(chunkPosL, currentUpdates);
-
-//        boolean isAir = state.isAir();
-//        boolean isWater = TidalWaveHandler.stateIsWater(state);
-//        Shoreline shoreline = posInShoreline(pos);
-//
-//        if(shoreline != null) {
-//            if(isWater || isAir) shoreline.removeBlock(pos);
-//            if(!isWater) return;
-//        }
-//
-//        //try to add block to nearby waterbody
-//        //this would have been in the (shoreline != null) statement, but moved here as this would not
-//        //have been called if the pos was not water(which is when it should be called)
-//        if(isWater) {
-//            for (Direction direction : Direction.Type.HORIZONTAL) {
-//                BlockPos neighbour = pos.offset(direction);
-//                if(world.isAir(neighbour)) continue;
-//                if(!TidalWaveHandler.posIsWater(this.world, neighbour)) continue;
-//
-//                WaterBody neighbourWaterBody = posInWaterBody(neighbour);
-//                if(neighbourWaterBody == null) continue;
-//                neighbourWaterBody.addBlock(pos); return;
-//            }
-//        }
-//
-//        WaterBody waterBody = posInWaterBody(pos);
-//        if(waterBody != null) {
-//            if(!isWater || isAir) waterBody.removeBlock(pos);
-//            if(isWater) return;
-//
-//            //try to add block to nearby shoreline
-//            for (Direction direction : Direction.Type.HORIZONTAL) {
-//                BlockPos neighbour = pos.offset(direction);
-//                if(world.isAir(neighbour)) continue;
-//                if(TidalWaveHandler.posIsWater(this.world, neighbour)) continue;
-//
-//                Shoreline neighbourShoreline = posInShoreline(neighbour);
-//                if(neighbourShoreline == null) continue;
-//                neighbourShoreline.addBlock(pos); return;
-//            }
-//        }
     }
 
     /**
