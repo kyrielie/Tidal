@@ -86,6 +86,7 @@ public class ChunkScanner {
         List<BlockPos> nonWaterBlocks = Lists.newArrayList();
         List<BlockPos> waterBlocks = Lists.newArrayList();
         if (posIsWater) waterBlocks.add(pos); else nonWaterBlocks.add(pos); //they keep getting more cursed
+        List<Float> shorelineYaw = Lists.newArrayList();
 
         for (Direction direction : Direction.Type.HORIZONTAL) {
             BlockPos checkPos = pos.offset(direction);
@@ -94,7 +95,10 @@ public class ChunkScanner {
             //that is super cursed but okay - no that's actually incredibly cursed(wow I spelt that right first try)
             //if init scan pos is water OR if the check pos is the top of water
             if(neighborIsWater) waterBlocks.add(checkPos);
-            else nonWaterBlocks.add(checkPos);
+            else {
+                nonWaterBlocks.add(checkPos);
+                if(posIsWater) shorelineYaw.add(direction.asRotation());
+            }
         }
 
         if(waterBlocks.isEmpty()) return;
@@ -122,6 +126,12 @@ public class ChunkScanner {
         }
 
         WaterBody waterBody = new WaterBody().withBlocks(waterBlocks);
+        if(!shorelineYaw.isEmpty()) {
+//            float total = (float) shorelineYaw.stream().mapToDouble(Float::floatValue).sum();
+//            float avg = total / shorelineYaw.size();
+//            waterBody.addYaw(new ChunkPos(pos).toLong(), avg);
+            waterBody.chunkedBlocks.get(new ChunkPos(pos).toLong()).addYaw(shorelineYaw);
+        }
         if(waterBody.getBlocks().isEmpty() || handler.tryMergeWaterBody(waterBody)) return;
         this.handler.waterBodies.add(waterBody);
     }

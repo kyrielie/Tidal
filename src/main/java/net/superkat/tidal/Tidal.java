@@ -10,6 +10,7 @@ import net.minecraft.util.Identifier;
 import net.superkat.tidal.duck.TidalWorld;
 import net.superkat.tidal.particles.debug.DebugShorelineParticle;
 import net.superkat.tidal.particles.debug.DebugWaterBodyParticle;
+import net.superkat.tidal.particles.debug.DebugWaveMovementParticle;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -25,6 +26,10 @@ public class Tidal implements ModInitializer {
 			DebugShorelineParticle.DebugShorelineParticleEffect.CODEC,
 			DebugShorelineParticle.DebugShorelineParticleEffect.PACKET_CODEC
 	);
+	public static final ParticleType<DebugWaveMovementParticle.DebugWaveMovementParticleEffect> DEBUG_WAVEMOVEMENT_PARTICLE = FabricParticleTypes.complex(
+			DebugWaveMovementParticle.DebugWaveMovementParticleEffect.CODEC,
+			DebugWaveMovementParticle.DebugWaveMovementParticleEffect.PACKET_CODEC
+	);
 
 	@Override
 	public void onInitialize() {
@@ -35,5 +40,6 @@ public class Tidal implements ModInitializer {
 
 		Registry.register(Registries.PARTICLE_TYPE, Identifier.of(MOD_ID, "debug_waterbody_particle"), DEBUG_WATERBODY_PARTICLE);
 		Registry.register(Registries.PARTICLE_TYPE, Identifier.of(MOD_ID, "debug_shoreline_particle"), DEBUG_SHORELINE_PARTICLE);
+		Registry.register(Registries.PARTICLE_TYPE, Identifier.of(MOD_ID, "debug_wavemovement_particle"), DEBUG_WAVEMOVEMENT_PARTICLE);
 	}
 }

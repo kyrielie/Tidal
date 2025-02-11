@@ -6,18 +6,21 @@ import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.fluid.FluidState;
 import net.minecraft.item.Items;
-import net.minecraft.particle.ParticleTypes;
+import net.minecraft.particle.ParticleEffect;
 import net.minecraft.registry.tag.FluidTags;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.math.random.Random;
 import net.minecraft.world.chunk.WorldChunk;
 import net.superkat.tidal.config.TidalConfig;
+import net.superkat.tidal.particles.debug.DebugWaveMovementParticle;
 import net.superkat.tidal.water.Shoreline;
 import net.superkat.tidal.water.WaterBody;
 import net.superkat.tidal.water.WaterBodyHandler;
 
+import java.awt.*;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -74,22 +77,44 @@ public class TidalWaveHandler {
         if(shouldDebugTick()) {
             waveTicks++;
             Set<WaterBody> waterBodies = waterBodyHandler.waterBodies.stream().filter(waterBody -> waterBody.getBlocks().size() >= 10).collect(Collectors.toSet());
-            if(waveTicks >= 20 && !waterBodyHandler.shorelines.isEmpty()) {
+            if(waveTicks >= 20 && !waterBodies.isEmpty() && !waterBodyHandler.shorelines.isEmpty()) {
                 for (WaterBody waterBody : waterBodies) {
-                    BlockPos spawnPos = waterBody.randomPos();
-
-                    Shoreline targetShoreline = waterBodyHandler.shorelines.stream().toList().get(getRandom().nextInt(waterBodyHandler.shorelines.size()));
+                    BlockPos spawnPos = waterBody.randomPos().add(0, 2, 0);
+//                    BlockPos spawnPos = waterBody.centerPos();
+                    Shoreline targetShoreline = waterBodyHandler.getClosestShoreline(spawnPos);
+                    if(targetShoreline == null) return;
+//                    Shoreline targetShoreline = waterBodyHandler.shorelines.stream().toList().get(getRandom().nextInt(waterBodyHandler.shorelines.size()));
+                    if(targetShoreline.getBlocks().isEmpty()) return;
+                    BlockPos targetPos = targetShoreline.randomPos().add(0, 2, 0);
 //                    BlockPos targetPos = targetShoreline.center();
-                    BlockPos targetPos = player.getBlockPos();
-                    int x = targetPos.getX() - spawnPos.getX();
-                    int y = targetPos.getY() - spawnPos.getY();
-                    int z = targetPos.getZ() - spawnPos.getZ();
+//                    BlockPos targetPos = player.getBlockPos();
+                    int x = spawnPos.getX() - targetPos.getX();
+                    int y = spawnPos.getY() - targetPos.getY();
+                    int z = spawnPos.getZ() - targetPos.getZ();
 
+                    Color color = randomDebugColor();
+                    ParticleEffect particleEffect = new DebugWaveMovementParticle.DebugWaveMovementParticleEffect(Vec3d.unpackRgb(color.getRGB()).toVector3f(), 1f);
+                    this.world.addParticle(particleEffect, true, targetPos.getX() + 0.5, targetPos.getY() + 3, targetPos.getZ() + 0.5, x, y, z);
 
-                    this.world.addParticle(ParticleTypes.NAUTILUS, true, spawnPos.getX() + 0.5, spawnPos.getY() + 3, spawnPos.getZ() + 0.5, x, y, z);
+                    color = Color.red;
+                    particleEffect = new DebugWaveMovementParticle.DebugWaveMovementParticleEffect(Vec3d.unpackRgb(color.getRGB()).toVector3f(), 1f);
+                    this.world.addParticle(particleEffect, true, spawnPos.getX() + 0.5, spawnPos.getY() + 3, spawnPos.getZ() + 0.5, 0, 0, 0);
+
+                    color = Color.orange;
+                    particleEffect = new DebugWaveMovementParticle.DebugWaveMovementParticleEffect(Vec3d.unpackRgb(color.getRGB()).toVector3f(), 1f);
+                    this.world.addParticle(particleEffect, true, targetPos.getX(), targetPos.getY() + 3, targetPos.getZ(), 0, 0, 0);
                 }
             }
         }
+    }
+
+    private Color randomDebugColor() {
+        Random random = getRandom();
+        int rgbIncrease = random.nextBetween(1, 3);
+        int red = rgbIncrease == 1 ? random.nextBetween(150, 255) : 255;
+        int green = rgbIncrease == 2 ? random.nextBetween(150, 255) : 255;
+        int blue = rgbIncrease == 3 ? random.nextBetween(150, 255) : 255;
+        return new Color(red, green, blue);
     }
 
     public static boolean shouldDebugTick() {

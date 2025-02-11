@@ -5,11 +5,13 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientChunkEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientWorldEvents;
 import net.fabricmc.fabric.api.client.particle.v1.ParticleFactoryRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.InvalidateRenderStateCallback;
+import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.client.MinecraftClient;
 import net.superkat.tidal.duck.TidalWorld;
 import net.superkat.tidal.event.ClientBlockUpdateEvent;
 import net.superkat.tidal.particles.debug.DebugShorelineParticle;
 import net.superkat.tidal.particles.debug.DebugWaterBodyParticle;
+import net.superkat.tidal.particles.debug.DebugWaveMovementParticle;
 
 public class TidalClient implements ClientModInitializer {
 
@@ -17,6 +19,7 @@ public class TidalClient implements ClientModInitializer {
     public void onInitializeClient() {
         ParticleFactoryRegistry.getInstance().register(Tidal.DEBUG_WATERBODY_PARTICLE, DebugWaterBodyParticle.Factory::new);
         ParticleFactoryRegistry.getInstance().register(Tidal.DEBUG_SHORELINE_PARTICLE, DebugShorelineParticle.Factory::new);
+        ParticleFactoryRegistry.getInstance().register(Tidal.DEBUG_WAVEMOVEMENT_PARTICLE, DebugWaveMovementParticle.Factory::new);
 
         //Called after joining a world, or changing dimensions
         ClientWorldEvents.AFTER_CLIENT_WORLD_CHANGE.register((client, world) -> {
@@ -50,6 +53,10 @@ public class TidalClient implements ClientModInitializer {
             TidalWorld tidalWorld = (TidalWorld) client.world;
             tidalWorld.tidal$tidalWaveHandler().reloadNearbyChunks();
             tidalWorld.tidal$tidalWaveHandler().waterBodyHandler.rebuild();
+        });
+
+        WorldRenderEvents.BEFORE_DEBUG_RENDER.register(context -> {
+            MinecraftClient.getInstance().debugRenderer.structureDebugRenderer.render(context.matrixStack(), context.consumers(), context.camera().getPos().getX(), context.camera().getPos().getY(), context.camera().getPos().getZ());
         });
     }
 }

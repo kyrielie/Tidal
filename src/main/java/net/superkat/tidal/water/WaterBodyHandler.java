@@ -15,6 +15,7 @@ import net.minecraft.sound.SoundEvents;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
+import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.chunk.Chunk;
 import net.superkat.tidal.Tidal;
@@ -64,6 +65,12 @@ public class WaterBodyHandler {
     //boolean for if the initial joining/chunk reloading build is finished or not
     public boolean built = false;
 
+    //Possible solution to wave direction
+    //Break shorelines up into chunks, while knowing which ones are connected to maintain size(allow for waves to react to shoreline size)
+    //Each chunk contains a yaw number, which is roughly the yaw used to offset the position towards the ocean
+    //(figure out how many shoreline blocks have water blocks toward each yaw(0, 90, 180, 270) -> average them all = answer)
+    //Some room, maybe ~30 degrees, of random rotation should be allowed
+
     //TODO - get all nearby loaded chunks to allow for scanners to have chunk scanners removed to save memory
     public WaterBodyHandler(ClientWorld world, TidalWaveHandler tidalWaveHandler) {
         this.world = world;
@@ -83,9 +90,63 @@ public class WaterBodyHandler {
         debugTick(client, player);
     }
 
+    public Shoreline getClosestShoreline(BlockPos pos) {
+        int closestDist = 0;
+        Shoreline closest = null;
+        for (Shoreline shoreline : this.shorelines) {
+            if(shoreline.getBlocks().isEmpty()) continue;
+            int distance = shoreline.randomPos().getManhattanDistance(pos);
+            if(closest == null || distance < closestDist) {
+                closest = shoreline;
+                closestDist = distance;
+            }
+        }
+        return closest;
+    }
+
     private void debugTick(MinecraftClient client, ClientPlayerEntity player) {
         if(this.world.getTime() % 10 != 0) return;
         boolean farParticles = false;
+
+        if(player.getMainHandStack().isOf(Items.COMPASS)) {
+            for (WaterBody waterBody : this.waterBodies) {
+                for (Map.Entry<Long, AbstractBlockSetTracker.TrackerChunkInfo> entry : waterBody.chunkedBlocks.entrySet()) {
+                    Long aLong = entry.getKey();
+                    AbstractBlockSetTracker.TrackerChunkInfo trackerChunkInfo = entry.getValue();
+                    if(!trackerChunkInfo.shouldMergeYaw) continue;
+                    ChunkPos cpos = new ChunkPos(aLong);
+                    int x = cpos.x;
+                    int z = cpos.z;
+                    AbstractBlockSetTracker.TrackerChunkInfo[] neighbours = new AbstractBlockSetTracker.TrackerChunkInfo[]{
+                            waterBody.chunkedBlocks.get(new ChunkPos(x + 1, z).toLong()),
+                            waterBody.chunkedBlocks.get(new ChunkPos(x - 1, z).toLong()),
+                            waterBody.chunkedBlocks.get(new ChunkPos(x, z + 1).toLong()),
+                            waterBody.chunkedBlocks.get(new ChunkPos(x, z - 1).toLong())
+                    };
+
+                    float totalYaw = trackerChunkInfo.getYaw();
+                    int addedYaws = 1;
+
+                    for (AbstractBlockSetTracker.TrackerChunkInfo n : neighbours) {
+                        if(n == null) continue;
+                        if(!n.shouldMergeYaw) continue;
+                        totalYaw += n.getYaw();
+                        addedYaws++;
+                    }
+
+                    if(addedYaws != 1) totalYaw /= addedYaws;
+                    BlockPos pos = new ChunkPos(aLong).getCenterAtY(67);
+                    Direction direction = Direction.fromRotation(totalYaw);
+                    BlockPos pos2 = pos.offset(direction);
+
+                    this.world.addParticle(ParticleTypes.WAX_OFF, pos.getX(), pos.getY(), pos.getZ(), 0, 0, 0);
+                    this.world.addParticle(ParticleTypes.NAUTILUS, pos2.getX(), pos2.getY(), pos2.getZ(), pos.getX() - pos2.getX(), 0, pos.getZ() - pos2.getZ());
+                    this.world.addParticle(ParticleTypes.WAX_ON, pos2.getX(), pos2.getY(), pos2.getZ(), 0, 0, 0);
+
+                }
+            }
+        }
+
         debugTrackerParticles(this.waterBodies, true, farParticles, player.getOffHandStack().isOf(Items.CLOCK));
         debugTrackerParticles(this.shorelines, false, farParticles, false);
     }
@@ -103,7 +164,7 @@ public class WaterBodyHandler {
             });
 
             if(showCenter) {
-                Vec3d center = tracker.center().toCenterPos();
+                Vec3d center = tracker.centerPos().toCenterPos();
                 this.world.addParticle(ParticleTypes.EXPLOSION, center.getX(), center.getY() + 1, center.getZ(), 0, 0, 0);
             }
         }
@@ -152,7 +213,7 @@ public class WaterBodyHandler {
                 scanner.tick();
                 if(scanner.isFinished()) {
                     scanners.put(scanner.chunkPos.toLong(), null);
-                    MinecraftClient.getInstance().player.playSound(SoundEvents.ITEM_TRIDENT_HIT_GROUND, 0.1f, 1f);
+                    MinecraftClient.getInstance().player.playSound(SoundEvents.ITEM_TRIDENT_HIT_GROUND, 0.05f, 1f);
 //                    Tidal.LOGGER.info("Scanner time: {} ms", Util.getMeasuringTimeMs() - scannerStartTime);
                 }
             }
@@ -193,7 +254,7 @@ public class WaterBodyHandler {
             }
             if(scanner.isFinished()) {
                 scanners.put(chunkPosL, null);
-                MinecraftClient.getInstance().player.playSound(SoundEvents.ITEM_TRIDENT_HIT_GROUND, 1f, 1f);
+                MinecraftClient.getInstance().player.playSound(SoundEvents.ITEM_TRIDENT_HIT_GROUND, 0.25f, 1f);
             }
         }
     }
@@ -255,6 +316,8 @@ public class WaterBodyHandler {
         this.shorelines.forEach(shoreline -> {
             shoreline.removeChunkBlocks(chunkPosL);
         });
+        this.waterBodies.removeIf(waterBody -> waterBody.chunkedBlocks.isEmpty());
+        this.shorelines.removeIf(waterBody -> waterBody.chunkedBlocks.isEmpty());
     }
 
     /**
@@ -269,7 +332,7 @@ public class WaterBodyHandler {
 
         WaterBody previousWater = waterBody;
         for (WaterBody waterBody1 : checkedWaters) {
-            waterBody1.merge(previousWater);
+            waterBody1.merge(previousWater, true);
             waterBodies.remove(previousWater);
             previousWater = waterBody1;
         }
@@ -299,18 +362,26 @@ public class WaterBodyHandler {
         LongSet chunkPosLs = waterBody.chunkedBlocks.keySet();
         if(chunkPosLs.isEmpty()) return Collections.emptySet();
         return waterBodies.stream()
-                .filter(checkedWater -> chunkPosLs.longStream()
-                    .anyMatch(chunkPosL -> checkedWater.chunkedBlocks.keySet().contains(chunkPosL)))
-                .collect(Collectors.toSet());
+                .filter(checkedWater ->
+                    chunkPosLs.longStream().anyMatch(chunkPosL ->
+                            checkedWater.chunkedBlocks.keySet().contains(chunkPosL)
+                                    && checkedWater.chunkedBlocks.get(chunkPosL).getBlocks().stream()
+                                    .anyMatch(pos -> waterBody.chunkedBlocks.get(chunkPosL).getBlocks().contains(pos)))
+//                                    && checkedWater.chunkedBlocks.get(chunkPosL).stream()
+//                                    .anyMatch(pos -> waterBody.chunkedBlocks.get(chunkPosL).contains(pos)))
+                    ).collect(Collectors.toSet());
     }
 
     public Set<Shoreline> shorelinesInAnother(Shoreline shoreline) {
         LongSet chunkPosLs = shoreline.chunkedBlocks.keySet();
         if(chunkPosLs.isEmpty()) return Collections.emptySet();
         return shorelines.stream()
-                .filter(checkedShore -> chunkPosLs.longStream()
-                        .anyMatch(chunkPosL -> checkedShore.chunkedBlocks.keySet().contains(chunkPosL)))
-                .collect(Collectors.toSet());
+                .filter(checkedShore ->
+                        chunkPosLs.longStream().anyMatch(chunkPosL ->
+                                checkedShore.chunkedBlocks.keySet().contains(chunkPosL)
+                                        && checkedShore.chunkedBlocks.get(chunkPosL).getBlocks().stream()
+                                        .anyMatch(pos -> shoreline.chunkedBlocks.get(chunkPosL).getBlocks().contains(pos)))
+                ).collect(Collectors.toSet());
     }
 
     @Nullable
@@ -318,7 +389,7 @@ public class WaterBodyHandler {
         long chunkPosL = new ChunkPos(pos).toLong();
         return waterBodies.stream()
                 .filter(waterBody -> waterBody.chunkedBlocks.keySet().contains(chunkPosL)
-                        && waterBody.chunkedBlocks.get(chunkPosL).contains(pos))
+                        && waterBody.chunkedBlocks.get(chunkPosL).getBlocks().contains(pos))
                 .findAny()
                 .orElse(null);
     }
@@ -328,7 +399,7 @@ public class WaterBodyHandler {
         long chunkPosL = new ChunkPos(pos).toLong();
         return shorelines.stream()
                 .filter(shoreline -> shoreline.chunkedBlocks.keySet().contains(chunkPosL)
-                        && shoreline.chunkedBlocks.get(chunkPosL).contains(pos))
+                        && shoreline.chunkedBlocks.get(chunkPosL).getBlocks().contains(pos))
                 .findAny()
                 .orElse(null);
     }
