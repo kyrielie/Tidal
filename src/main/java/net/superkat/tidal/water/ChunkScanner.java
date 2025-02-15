@@ -117,8 +117,13 @@ public class ChunkScanner {
         if(!nonWaterBlocks.isEmpty()) {
             //water has to be next to the shoreline
             if(waterBlocks.isEmpty()) return;
-            Shoreline shoreline = new Shoreline().withBlocks(nonWaterBlocks);
-            if (!shoreline.getBlocks().isEmpty() && !handler.tryMergeShoreline(shoreline)) this.handler.shorelines.add(shoreline);
+            for (BlockPos nonWater : nonWaterBlocks) {
+                long chunkPosL = new ChunkPos(nonWater).toLong();
+                this.handler.shoreBlocks.computeIfAbsent(chunkPosL, aLong -> new ObjectOpenHashSet<>()).add(nonWater);
+//                this.handler.shoreBlocks.putIfAbsent(chunkPosL, nonWater);
+            }
+//            Shoreline shoreline = new Shoreline().withBlocks(nonWaterBlocks);
+//            if (!shoreline.getBlocks().isEmpty() && !handler.tryMergeShoreline(shoreline)) this.handler.shorelines.add(shoreline);
 
             //no water bodies should be created from non-water scanned pos
             //returning here to reduce the amount this check is called every so slightly
@@ -126,12 +131,6 @@ public class ChunkScanner {
         }
 
         WaterBody waterBody = new WaterBody().withBlocks(waterBlocks);
-        if(!shorelineYaw.isEmpty()) {
-//            float total = (float) shorelineYaw.stream().mapToDouble(Float::floatValue).sum();
-//            float avg = total / shorelineYaw.size();
-//            waterBody.addYaw(new ChunkPos(pos).toLong(), avg);
-            waterBody.chunkedBlocks.get(new ChunkPos(pos).toLong()).addYaw(shorelineYaw);
-        }
         if(waterBody.getBlocks().isEmpty() || handler.tryMergeWaterBody(waterBody)) return;
         this.handler.waterBodies.add(waterBody);
     }

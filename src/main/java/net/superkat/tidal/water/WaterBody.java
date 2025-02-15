@@ -9,7 +9,7 @@ import java.util.Collection;
  * <br><br>
  * Used to dynamically adjust tide waves.
  */
-public class WaterBody extends AbstractBlockSetTracker {
+public class WaterBody extends BlockSetTracker {
 
     @Override
     public WaterBody withBlocks(Collection<BlockPos> blocks) {

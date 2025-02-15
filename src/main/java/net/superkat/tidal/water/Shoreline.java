@@ -9,7 +9,7 @@ import java.util.Collection;
  * <br><br>
  * Used to determine where water tides should head towards.
  */
-public class Shoreline extends AbstractBlockSetTracker {
+public class Shoreline extends BlockSetTracker {
 
     @Override
     public Shoreline withBlocks(Collection<BlockPos> blocks) {

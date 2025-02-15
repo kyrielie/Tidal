@@ -3,19 +3,19 @@ package net.superkat.tidal.water;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongSet;
+import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.objects.ObjectArrayFIFOQueue;
 import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.world.ClientWorld;
-import net.minecraft.item.Items;
 import net.minecraft.particle.ParticleEffect;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
-import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.chunk.Chunk;
 import net.superkat.tidal.Tidal;
@@ -23,10 +23,15 @@ import net.superkat.tidal.TidalWaveHandler;
 import net.superkat.tidal.config.TidalConfig;
 import net.superkat.tidal.particles.debug.DebugShorelineParticle;
 import net.superkat.tidal.particles.debug.DebugWaterBodyParticle;
+import net.superkat.tidal.water.voronoi.SitePos;
+import net.superkat.tidal.water.voronoi.VoronoiChunkScanner;
+import org.apache.commons.compress.utils.Lists;
 import org.jetbrains.annotations.Nullable;
 
 import java.awt.*;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -46,7 +51,7 @@ import java.util.stream.Collectors;
  *
  * @see TidalWaveHandler
  * @see ChunkScanner
- * @see AbstractBlockSetTracker
+ * @see BlockSetTracker
  */
 public class WaterBodyHandler {
     public final TidalWaveHandler tidalWaveHandler;
@@ -60,16 +65,39 @@ public class WaterBodyHandler {
 
     //using fastutils because... it has fast in its name? I've been told its fast! And I gotta go fast!
     public Set<WaterBody> waterBodies = new ReferenceOpenHashSet<>();
-    public Set<Shoreline> shorelines = new ReferenceOpenHashSet<>();
+
+//    public Object2ObjectOpenHashMap<BlockPos, SitePos> siteCache = new Object2ObjectOpenHashMap<>();
+
+    public Object2ObjectOpenHashMap<SitePos, Set<BlockPos>> debugSiteCache = new Object2ObjectOpenHashMap<>();
+
+    public ObjectArrayFIFOQueue<BlockPos> waitingWaterBlocks = new ObjectArrayFIFOQueue<>();
+    public Long2ObjectLinkedOpenHashMap<Set<SitePos>> sites = new Long2ObjectLinkedOpenHashMap<>(256, 0.25f);
+    public Long2ObjectLinkedOpenHashMap<Object2ObjectOpenHashMap<BlockPos, SitePos>> siteCache = new Long2ObjectLinkedOpenHashMap<>();
+
+    public Long2ObjectLinkedOpenHashMap<Set<BlockPos>> shoreBlocks = new Long2ObjectLinkedOpenHashMap<>(256, 0.25f);
+
 
     //boolean for if the initial joining/chunk reloading build is finished or not
     public boolean built = false;
 
-    //Possible solution to wave direction
-    //Break shorelines up into chunks, while knowing which ones are connected to maintain size(allow for waves to react to shoreline size)
-    //Each chunk contains a yaw number, which is roughly the yaw used to offset the position towards the ocean
-    //(figure out how many shoreline blocks have water blocks toward each yaw(0, 90, 180, 270) -> average them all = answer)
-    //Some room, maybe ~30 degrees, of random rotation should be allowed
+    //TODO - THE ULTIMATE PLAN
+    //Chunk scanners should:
+    // - find shoreline sites
+    // - add scanned water blocks to a queue here
+    //That queue will be iterated through to find a water block's closest site after all activate scanners are done
+    //Scanners, sites, and queued blocks need to be sorted via chunks(longs).
+    //Once all scanners are done, the water block queue begins.
+    //Each block will be a key with a site pos, sorted via chunks(siteCache) (this is the version of regions)
+    //water bodies will be replaced with these regions. Some of them can still be pretty big, and probably provide more accurate size data per area anyways.
+
+    //FIXME - init build doesn't get all nearby chunks(reload build scans more chunks than join build)
+
+    //TODO - chunk ticker(holds chunk scanner, blockpos site cache ticking) (may not be worth it with new idea?)
+
+    //TODO - optimize this - save yaw angle in site, and then try to use that info for spawning waves
+    //TODO - optimize the voronoi diagram stuff, put sites/regions in water bodies?
+    //TODO - optmize shorelines, as they are now no longer seperated
+    //TODO - delete old stuff, e.g. water scanner, chunk info (chunk info still useless)
 
     //TODO - get all nearby loaded chunks to allow for scanners to have chunk scanners removed to save memory
     public WaterBodyHandler(ClientWorld world, TidalWaveHandler tidalWaveHandler) {
@@ -90,71 +118,164 @@ public class WaterBodyHandler {
         debugTick(client, player);
     }
 
-    public Shoreline getClosestShoreline(BlockPos pos) {
-        int closestDist = 0;
-        Shoreline closest = null;
-        for (Shoreline shoreline : this.shorelines) {
-            if(shoreline.getBlocks().isEmpty()) continue;
-            int distance = shoreline.randomPos().getManhattanDistance(pos);
-            if(closest == null || distance < closestDist) {
-                closest = shoreline;
-                closestDist = distance;
+    @Nullable
+    public SitePos findClosestSite(BlockPos pos) {
+        //TODO - check if chunk has site first, if not then check for closest chunk pos, then check that chunk for site?
+        if(this.sites.isEmpty()) return null;
+
+        Set<SitePos> siteSet;
+        long chunkPosL = new ChunkPos(pos).toLong();
+        if(this.sites.get(chunkPosL) != null) {
+            siteSet = this.sites.get(chunkPosL);
+        } else {
+            siteSet = this.sites.values().stream().flatMap(Collection::stream).collect(Collectors.toSet());
+        }
+
+        double distance = 0;
+        SitePos closest = null;
+        for (SitePos site : siteSet) {
+            double dx = pos.getX() + 0.5 - site.getX();
+            double dz = pos.getZ() + 0.5 - site.getZ();
+            double dist = dx * dx + dz * dz;
+
+//            if(closest == null || dist < distance || (dist == distance && world.random.nextBoolean())) {
+            if(closest == null || dist < distance) {
+                closest = site;
+                distance = dist;
             }
         }
         return closest;
+
+//        double distance = 0;
+//        BlockPos closest = null;
+//        return this.chunkedBlocks.values().stream().flatMap(trackerChunkInfo -> trackerChunkInfo.blocks.stream()).collect(Collectors.toSet());
+//        for (BlockPos shore : this.shoreBlocks.values().stream().flatMap(Collection::stream).collect(Collectors.toSet())) {
+//            double dx = pos.getX() + 0.5 - shore.getX();
+//            double dz = pos.getZ() + 0.5 - shore.getZ();
+//            double dist = dx * dx + dz * dz;
+//            if(closest == null || dist < distance || (dist == distance && world.random.nextBoolean())) {
+//                closest = shore;
+//                distance = dist;
+//            }
+//        }
+//        return closest;
+    }
+
+    public BlockPos getSiteForPos(BlockPos pos) {
+//        SitePos site = this.siteCache.computeIfAbsent(pos, pos1 -> {
+//            SitePos closest = findClosestSite(pos);
+//            if(closest != null) closest.addPos(pos);
+//            return closest;
+//        });
+        long chunkPosL = new ChunkPos(pos).toLong();
+        SitePos site = this.siteCache
+                .computeIfAbsent(chunkPosL,
+                        chunkPosL2 -> new Object2ObjectOpenHashMap<>()
+                ).computeIfAbsent(pos, pos1 -> {
+                    SitePos closest = findClosestSite(pos);
+                    if(closest != null) closest.addPos(pos);
+                    return closest;
+                });
+        if(site == null) return BlockPos.ORIGIN;
+        return site.getPos();
     }
 
     private void debugTick(MinecraftClient client, ClientPlayerEntity player) {
         if(this.world.getTime() % 10 != 0) return;
         boolean farParticles = false;
 
-        if(player.getMainHandStack().isOf(Items.COMPASS)) {
-            for (WaterBody waterBody : this.waterBodies) {
-                for (Map.Entry<Long, AbstractBlockSetTracker.TrackerChunkInfo> entry : waterBody.chunkedBlocks.entrySet()) {
-                    Long aLong = entry.getKey();
-                    AbstractBlockSetTracker.TrackerChunkInfo trackerChunkInfo = entry.getValue();
-                    if(!trackerChunkInfo.shouldMergeYaw) continue;
-                    ChunkPos cpos = new ChunkPos(aLong);
-                    int x = cpos.x;
-                    int z = cpos.z;
-                    AbstractBlockSetTracker.TrackerChunkInfo[] neighbours = new AbstractBlockSetTracker.TrackerChunkInfo[]{
-                            waterBody.chunkedBlocks.get(new ChunkPos(x + 1, z).toLong()),
-                            waterBody.chunkedBlocks.get(new ChunkPos(x - 1, z).toLong()),
-                            waterBody.chunkedBlocks.get(new ChunkPos(x, z + 1).toLong()),
-                            waterBody.chunkedBlocks.get(new ChunkPos(x, z - 1).toLong())
-                    };
+//        if(player.getMainHandStack().isOf(Items.COMPASS)) {
+//            for (WaterBody waterBody : this.waterBodies) {
+//                for (Map.Entry<Long, BlockSetTracker.TrackedChunk> entry : waterBody.chunkedBlocks.entrySet()) {
+//                    Long aLong = entry.getKey();
+//                    BlockSetTracker.TrackedChunk trackedChunk = entry.getValue();
+//                    if(!trackedChunk.shouldMergeYaw) continue;
+//                    ChunkPos cpos = new ChunkPos(aLong);
+//                    int x = cpos.x;
+//                    int z = cpos.z;
+//                    BlockSetTracker.TrackedChunk[] neighbours = new BlockSetTracker.TrackedChunk[]{
+//                            waterBody.chunkedBlocks.get(new ChunkPos(x + 1, z).toLong()),
+//                            waterBody.chunkedBlocks.get(new ChunkPos(x - 1, z).toLong()),
+//                            waterBody.chunkedBlocks.get(new ChunkPos(x, z + 1).toLong()),
+//                            waterBody.chunkedBlocks.get(new ChunkPos(x, z - 1).toLong())
+//                    };
+//
+//                    float totalYaw = trackedChunk.getYaw();
+//                    int addedYaws = 1;
+//
+//                    for (BlockSetTracker.TrackedChunk n : neighbours) {
+//                        if(n == null) continue;
+//                        if(!n.shouldMergeYaw) continue;
+//                        totalYaw += n.getYaw();
+//                        addedYaws++;
+//                    }
+//
+//                    if(addedYaws != 1) totalYaw /= addedYaws;
+//                    BlockPos pos = new ChunkPos(aLong).getCenterAtY(67);
+//                    Direction direction = Direction.fromRotation(totalYaw);
+//                    BlockPos pos2 = pos.offset(direction);
+//
+//                    this.world.addParticle(ParticleTypes.WAX_OFF, pos.getX(), pos.getY(), pos.getZ(), 0, 0, 0);
+//                    this.world.addParticle(ParticleTypes.NAUTILUS, pos2.getX(), pos2.getY(), pos2.getZ(), pos.getX() - pos2.getX(), 0, pos.getZ() - pos2.getZ());
+//                    this.world.addParticle(ParticleTypes.WAX_ON, pos2.getX(), pos2.getY(), pos2.getZ(), 0, 0, 0);
+//
+//                    if(player.isSneaking()) {
+//                        if(aLong == player.getChunkPos().toLong()) {
+//                            System.out.println(totalYaw);
+//                        }
+//                    }
+//
+//                }
+//            }
+//        }
 
-                    float totalYaw = trackerChunkInfo.getYaw();
-                    int addedYaws = 1;
+        int i = 0;
+        List<SitePos> allSites = this.sites.values().stream().flatMap(Collection::stream).toList();
+        for (SitePos site : allSites) {
+            this.world.addParticle(ParticleTypes.EGG_CRACK, true, site.getX() + 0.5, site.getY() + 4, site.getZ() + 0.5, 0, 0, 0);
+            Color color = debugColor(i, allSites.size());
+            i++;
 
-                    for (AbstractBlockSetTracker.TrackerChunkInfo n : neighbours) {
-                        if(n == null) continue;
-                        if(!n.shouldMergeYaw) continue;
-                        totalYaw += n.getYaw();
-                        addedYaws++;
-                    }
+            Set<BlockPos> region = this.debugSiteCache.computeIfAbsent(site, site1 ->
+                    this.siteCache.values().stream()
+                            .flatMap(
+                                    map -> map.entrySet().stream()
+                                            .filter(entry -> entry.getValue() == site)
+                            ).map(Map.Entry::getKey)
+                            .collect(Collectors.toSet()));
 
-                    if(addedYaws != 1) totalYaw /= addedYaws;
-                    BlockPos pos = new ChunkPos(aLong).getCenterAtY(67);
-                    Direction direction = Direction.fromRotation(totalYaw);
-                    BlockPos pos2 = pos.offset(direction);
-
-                    this.world.addParticle(ParticleTypes.WAX_OFF, pos.getX(), pos.getY(), pos.getZ(), 0, 0, 0);
-                    this.world.addParticle(ParticleTypes.NAUTILUS, pos2.getX(), pos2.getY(), pos2.getZ(), pos.getX() - pos2.getX(), 0, pos.getZ() - pos2.getZ());
-                    this.world.addParticle(ParticleTypes.WAX_ON, pos2.getX(), pos2.getY(), pos2.getZ(), 0, 0, 0);
-
-                }
+            for (BlockPos blockPos : region) {
+                Vec3d pos = blockPos.toCenterPos();
+                ParticleEffect particleEffect = new DebugWaterBodyParticle.DebugWaterBodyParticleEffect(Vec3d.unpackRgb(color.getRGB()).toVector3f(), 1f);
+                this.world.addParticle(particleEffect, pos.getX(), pos.getY() + 3, pos.getZ(), 0, 0, 0);
             }
         }
 
-        debugTrackerParticles(this.waterBodies, true, farParticles, player.getOffHandStack().isOf(Items.CLOCK));
-        debugTrackerParticles(this.shorelines, false, farParticles, false);
+
+//        int i = 0;
+//        for (SitePos sitePos : this.sites) {
+//            this.world.addParticle(ParticleTypes.EGG_CRACK, true, sitePos.getX() + 0.5, sitePos.getY() + 4, sitePos.getZ() + 0.5, 0, 0, 0);
+//            RegionSet region = sitePos.region;
+//            if(region.blocks.size() < 10) continue;
+//            Color color = debugColor(i, region.blocks.size());
+//            i++;
+//            region.blocks.forEach(blockPos -> {
+//                Vec3d pos = blockPos.toCenterPos();
+//                ParticleEffect particleEffect = new DebugWaterBodyParticle.DebugWaterBodyParticleEffect(Vec3d.unpackRgb(color.getRGB()).toVector3f(), 1f);
+//                this.world.addParticle(particleEffect, pos.getX(), pos.getY() + 3, pos.getZ(), 0, 0, 0);
+//            });
+//        }
+
+//        debugTrackerParticles(this.waterBodies, true, farParticles, player.getOffHandStack().isOf(Items.CLOCK));
+//        debugTrackerParticles(this.shorelines, false, farParticles, false);
     }
 
-    private void debugTrackerParticles(Set<? extends AbstractBlockSetTracker> trackers, boolean waterBodyParticle, boolean farParticle, boolean showCenter) {
+    private void debugTrackerParticles(Set<? extends BlockSetTracker> trackers, boolean waterBodyParticle, boolean farParticle, boolean showCenter) {
         int i = 0;
-        for (AbstractBlockSetTracker tracker : trackers) {
+        List<Color> colors = Lists.newArrayList();
+        for (BlockSetTracker tracker : trackers) {
             Color color = debugColor(i, trackers.size());
+            colors.add(color);
             i++;
             tracker.getBlocks().forEach(blockPos -> {
                 Vec3d pos = blockPos.toCenterPos();
@@ -174,10 +295,12 @@ public class WaterBodyHandler {
     private Color debugColor(int i, int size) {
         if(i == 0) { return Color.white; }
         //super ultra cursed debug colors - wait actually I'm a bit of a genuius
-        int i1 = i > 3 ? 255 - (255 / (size - 3) * (i - 3)) : 0;
+        //confusing, mind confusing confused, don't understand no snese uh - confusing
+        int i1 = i > 3 ? 255 - (((((i - 3) / 3) + 1) * 30) % 255) : 0;
+        int i2 = i > 3 ? 255 - (((((i - 3) / 3) + 1) * 30) / 255) * 30 : 255;
         int red = i == 1 ? 255 : i == 2 || i == 3 ? 0 : (i % 3 == 1 ? i1 : 255);
         int green = i == 2 ? 255 : i == 1 || i == 3 ? 0 : (i % 3 == 2 ? i1 : 255);
-        int blue = i == 3 ? 255 : i == 1 || i == 2 ? 0 : (i % 3 == 0 ? i1 : 255);
+        int blue = i == 3 ? 255 : i == 1 || i == 2 ? 0 : (i % 3 == 0 ? i1 : i2);
         return new Color(checkColor(red), checkColor(green), checkColor(blue));
     }
 
@@ -206,6 +329,7 @@ public class WaterBodyHandler {
         long overallStartTime = Util.getMeasuringTimeMs();
         Tidal.LOGGER.info("-=+=========================+=-");
 
+        long scannerTime = Util.getMeasuringTimeMs();
         for (ChunkScanner scanner : this.scanners.values()) {
             if(scanner == null) continue;
 //            long scannerStartTime = Util.getMeasuringTimeMs();
@@ -218,8 +342,23 @@ public class WaterBodyHandler {
                 }
             }
         }
+        Tidal.LOGGER.info("Total scan time: {} ms", Util.getMeasuringTimeMs() - scannerTime);
 
-        Tidal.LOGGER.info("Total Chunk Builder time: {} ms", Util.getMeasuringTimeMs() - overallStartTime);
+        long siteCacheTime = Util.getMeasuringTimeMs();
+        for (WaterBody waterBody : this.waterBodies) {
+            for (BlockPos blockPos : waterBody.getBlocks()) {
+                getSiteForPos(blockPos);
+            }
+        }
+        Tidal.LOGGER.info("Site cache time: {} ms", Util.getMeasuringTimeMs() - siteCacheTime);
+
+        long siteCenterCalcTime = Util.getMeasuringTimeMs();
+        for (SitePos site : this.sites.values().stream().flatMap(Collection::stream).toList()) {
+            site.updateCenter();
+        }
+        Tidal.LOGGER.info("Site center calc time: {} ms", Util.getMeasuringTimeMs() - siteCenterCalcTime);
+
+        Tidal.LOGGER.info("Total Chunk Build time: {} ms", Util.getMeasuringTimeMs() - overallStartTime);
         Tidal.LOGGER.info("-=+=========================+=-");
 
         return true;
@@ -234,7 +373,7 @@ public class WaterBodyHandler {
         for (Map.Entry<Long, ChunkScanner> entry : this.scanners.sequencedEntrySet()) {
             ChunkPos chunkPos = new ChunkPos(entry.getKey());
             long pos = chunkPos.toLong();
-            this.scanners.put(pos, new ChunkScanner(this, this.world, chunkPos));
+            this.scanners.put(pos, new VoronoiChunkScanner(this, this.world, chunkPos));
         }
 
         this.built = build();
@@ -285,7 +424,7 @@ public class WaterBodyHandler {
      */
     public void scheduleChunkScanner(ChunkPos chunkPos) {
         long pos = chunkPos.toLong();
-        this.scanners.computeIfAbsent(pos, pos1 -> new ChunkScanner(this, this.world, chunkPos));
+        this.scanners.computeIfAbsent(pos, pos1 -> new VoronoiChunkScanner(this, this.world, chunkPos));
     }
 
     /**
@@ -297,7 +436,7 @@ public class WaterBodyHandler {
     public boolean rescheduleChunkScanner(ChunkPos chunkPos) {
         long pos = chunkPos.toLong();
         if (this.scanners.get(pos) != null) return false;
-        this.scanners.put(pos, new ChunkScanner(this, this.world, chunkPos));
+        this.scanners.put(pos, new VoronoiChunkScanner(this, this.world, chunkPos));
         this.removeChunkFromTrackers(pos);
         return true;
     }
@@ -310,14 +449,18 @@ public class WaterBodyHandler {
     }
 
     public void removeChunkFromTrackers(long chunkPosL) {
+//        List<BlockPos> removedWaterBlocks = new ObjectArrayList<>();
         this.waterBodies.forEach(waterBody -> {
+//            removedWaterBlocks.addAll(waterBody.chunkedBlocks.get(chunkPosL).getBlocks());
             waterBody.removeChunkBlocks(chunkPosL);
         });
-        this.shorelines.forEach(shoreline -> {
-            shoreline.removeChunkBlocks(chunkPosL);
-        });
+//        removedWaterBlocks.forEach(this.siteCache.keySet()::remove);
+        this.shoreBlocks.remove(chunkPosL);
+        this.siteCache.remove(chunkPosL);
+        this.sites.remove(chunkPosL);
+
+        //remove empty water body
         this.waterBodies.removeIf(waterBody -> waterBody.chunkedBlocks.isEmpty());
-        this.shorelines.removeIf(waterBody -> waterBody.chunkedBlocks.isEmpty());
     }
 
     /**
@@ -332,22 +475,9 @@ public class WaterBodyHandler {
 
         WaterBody previousWater = waterBody;
         for (WaterBody waterBody1 : checkedWaters) {
-            waterBody1.merge(previousWater, true);
+            waterBody1.merge(previousWater);
             waterBodies.remove(previousWater);
             previousWater = waterBody1;
-        }
-        return true;
-    }
-
-    public boolean tryMergeShoreline(Shoreline shoreline) {
-        Set<Shoreline> checkedShorelines = shorelinesInAnother(shoreline);
-        if(checkedShorelines.isEmpty()) return false;
-
-        Shoreline previousShore = shoreline;
-        for (Shoreline shoreline1 : checkedShorelines) {
-            shoreline1.merge(previousShore);
-            shorelines.remove(previousShore);
-            previousShore = shoreline1;
         }
         return true;
     }
@@ -372,34 +502,12 @@ public class WaterBodyHandler {
                     ).collect(Collectors.toSet());
     }
 
-    public Set<Shoreline> shorelinesInAnother(Shoreline shoreline) {
-        LongSet chunkPosLs = shoreline.chunkedBlocks.keySet();
-        if(chunkPosLs.isEmpty()) return Collections.emptySet();
-        return shorelines.stream()
-                .filter(checkedShore ->
-                        chunkPosLs.longStream().anyMatch(chunkPosL ->
-                                checkedShore.chunkedBlocks.keySet().contains(chunkPosL)
-                                        && checkedShore.chunkedBlocks.get(chunkPosL).getBlocks().stream()
-                                        .anyMatch(pos -> shoreline.chunkedBlocks.get(chunkPosL).getBlocks().contains(pos)))
-                ).collect(Collectors.toSet());
-    }
-
     @Nullable
     public WaterBody posInWaterBody(BlockPos pos) {
         long chunkPosL = new ChunkPos(pos).toLong();
         return waterBodies.stream()
                 .filter(waterBody -> waterBody.chunkedBlocks.keySet().contains(chunkPosL)
                         && waterBody.chunkedBlocks.get(chunkPosL).getBlocks().contains(pos))
-                .findAny()
-                .orElse(null);
-    }
-
-    @Nullable
-    public Shoreline posInShoreline(BlockPos pos) {
-        long chunkPosL = new ChunkPos(pos).toLong();
-        return shorelines.stream()
-                .filter(shoreline -> shoreline.chunkedBlocks.keySet().contains(chunkPosL)
-                        && shoreline.chunkedBlocks.get(chunkPosL).getBlocks().contains(pos))
                 .findAny()
                 .orElse(null);
     }
@@ -417,17 +525,12 @@ public class WaterBodyHandler {
         }
     }
 
-    public void removePosFromShorelines(BlockPos pos) {
-        long chunkPosL = new ChunkPos(pos).toLong();
-        for (Shoreline shoreline : shorelines) {
-            if(!shoreline.chunkedBlocks.containsKey(chunkPosL)) continue;
-            shoreline.getBlockSet(pos).remove(pos);
-        }
-    }
-
     public void clear() {
         clearWaterBodies();
         clearShorelines();
+        this.sites.clear();
+        this.siteCache.clear();
+        this.debugSiteCache.clear();
     }
 
     public void clearWaterBodies() {
@@ -435,6 +538,6 @@ public class WaterBodyHandler {
     }
 
     public void clearShorelines() {
-        shorelines.clear();
+        this.shoreBlocks.clear();
     }
 }
