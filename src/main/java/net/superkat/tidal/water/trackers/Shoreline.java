@@ -1,4 +1,4 @@
-package net.superkat.tidal.water;
+package net.superkat.tidal.water.trackers;
 
 import net.minecraft.util.math.BlockPos;
 

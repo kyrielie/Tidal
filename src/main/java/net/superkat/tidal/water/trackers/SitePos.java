@@ -1,4 +1,4 @@
-package net.superkat.tidal.water.voronoi;
+package net.superkat.tidal.water.trackers;
 
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import net.minecraft.util.math.BlockPos;

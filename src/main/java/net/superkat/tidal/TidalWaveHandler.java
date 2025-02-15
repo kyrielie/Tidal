@@ -6,22 +6,19 @@ import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.fluid.FluidState;
 import net.minecraft.item.Items;
-import net.minecraft.particle.ParticleEffect;
 import net.minecraft.registry.tag.FluidTags;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.ChunkPos;
 import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.math.random.Random;
 import net.minecraft.world.chunk.WorldChunk;
 import net.superkat.tidal.config.TidalConfig;
-import net.superkat.tidal.particles.debug.DebugWaveMovementParticle;
-import net.superkat.tidal.water.WaterBody;
 import net.superkat.tidal.water.WaterBodyHandler;
+import net.superkat.tidal.water.trackers.SitePos;
 
 import java.awt.*;
 import java.util.List;
-import java.util.Set;
 
 /**
  * Used for handling when tidal waves should spawn, as well as ticking the {@link WaterBodyHandler}
@@ -75,11 +72,26 @@ public class TidalWaveHandler {
     public void debugTick(MinecraftClient client, ClientPlayerEntity player) {
         if(shouldDebugTick()) {
             waveTicks++;
+
+            BlockPos playerPos = player.getBlockPos();
+
+            List<BlockPos> scannedBlocks = this.waterBodyHandler.siteCache.values().stream().flatMap(map -> map.keySet().stream()).toList();
+            if(scannedBlocks.contains(playerPos)) {
+                long chunkPosL = new ChunkPos(playerPos).toLong();
+                SitePos site = this.waterBodyHandler.siteCache.get(chunkPosL).get(playerPos);
+                if(client.world.getTime() % 20 == 0) {
+                    float yaw = site.yaw - 90;
+                    if(yaw < 0) yaw += 360;
+                    if(yaw > 180) yaw -= 360;
+                    System.out.println(yaw);
+                }
+            }
+
 //            Set<WaterBody> waterBodies = waterBodyHandler.waterBodies.stream().filter(waterBody -> waterBody.getBlocks().size() >= 10).collect(Collectors.toSet());
-            Set<WaterBody> waterBodies = waterBodyHandler.waterBodies;
+//            Set<WaterBody> waterBodies = waterBodyHandler.waterBodies;
 //            if(waveTicks >= 20 && !waterBodies.isEmpty() && !waterBodyHandler.shorelines.isEmpty()) {
-            if(waveTicks >= 20 && !waterBodies.isEmpty()) {
-                for (WaterBody waterBody : waterBodies) {
+//            if(waveTicks >= 20 && !waterBodies.isEmpty()) {
+//                for (WaterBody waterBody : waterBodies) {
 //                    BlockPos spawnPos = waterBody.randomPos().add(0, 2, 0);
 //                    BlockPos spawnPos = waterBody.centerPos();
 //                    Optional<BlockPos> aPos = waterBody.chunkedBlocks.get(player.getChunkPos().toLong()).getBlocks().stream().filter(pos -> pos.getX() == player.getX() && pos.getZ() == player.getZ()).findAny();
@@ -90,37 +102,37 @@ public class TidalWaveHandler {
 //                    Shoreline targetShoreline = waterBodyHandler.shorelines.stream().toList().get(getRandom().nextInt(waterBodyHandler.shorelines.size()));
 //                    if(targetShoreline.getBlocks().isEmpty()) return;
 
-                    long chunkPosL = player.getChunkPos().toLong();
-                    if(!waterBody.chunkedBlocks.containsKey(chunkPosL)) continue;
-                    BlockPos spawnPos = waterBody.chunkedBlocks.get(chunkPosL).getBlocks().get(player.getBlockPos());
-                    if(spawnPos == null) continue;
-
-                    BlockPos targetPos = waterBodyHandler.getSiteForPos(spawnPos).add(0, 2, 0);
-//                    BlockPos targetPos = targetShoreline.center();
-//                    BlockPos targetPos = player.getBlockPos();
-                    int x = spawnPos.getX() - targetPos.getX();
-                    int y = spawnPos.getY() - targetPos.getY();
-                    int z = spawnPos.getZ() - targetPos.getZ();
-
-                    Color color = randomDebugColor();
-                    ParticleEffect particleEffect = new DebugWaveMovementParticle.DebugWaveMovementParticleEffect(Vec3d.unpackRgb(color.getRGB()).toVector3f(), 1f);
-                    this.world.addParticle(particleEffect, true, targetPos.getX() + 0.5, targetPos.getY() + 3, targetPos.getZ() + 0.5, x, y, z);
-
-                    color = Color.red;
-                    particleEffect = new DebugWaveMovementParticle.DebugWaveMovementParticleEffect(Vec3d.unpackRgb(color.getRGB()).toVector3f(), 1f);
-                    this.world.addParticle(particleEffect, true, spawnPos.getX() + 0.5, spawnPos.getY() + 3, spawnPos.getZ() + 0.5, 0, 0, 0);
-
-                    color = Color.orange;
-                    particleEffect = new DebugWaveMovementParticle.DebugWaveMovementParticleEffect(Vec3d.unpackRgb(color.getRGB()).toVector3f(), 1f);
-                    this.world.addParticle(particleEffect, true, targetPos.getX() + 0.5, targetPos.getY() + 3, targetPos.getZ() + 0.5, 0, 0, 0);
-                }
+//                    long chunkPosL = player.getChunkPos().toLong();
+//                    if(!waterBody.chunkedBlocks.containsKey(chunkPosL)) continue;
+//                    BlockPos spawnPos = waterBody.chunkedBlocks.get(chunkPosL).getBlocks().get(player.getBlockPos());
+//                    if(spawnPos == null) continue;
+//
+//                    BlockPos targetPos = waterBodyHandler.getSiteForPos(spawnPos).add(0, 2, 0);
+////                    BlockPos targetPos = targetShoreline.center();
+////                    BlockPos targetPos = player.getBlockPos();
+//                    int x = spawnPos.getX() - targetPos.getX();
+//                    int y = spawnPos.getY() - targetPos.getY();
+//                    int z = spawnPos.getZ() - targetPos.getZ();
+//
+//                    Color color = randomDebugColor();
+//                    ParticleEffect particleEffect = new DebugWaveMovementParticle.DebugWaveMovementParticleEffect(Vec3d.unpackRgb(color.getRGB()).toVector3f(), 1f);
+//                    this.world.addParticle(particleEffect, true, targetPos.getX() + 0.5, targetPos.getY() + 3, targetPos.getZ() + 0.5, x, y, z);
+//
+//                    color = Color.red;
+//                    particleEffect = new DebugWaveMovementParticle.DebugWaveMovementParticleEffect(Vec3d.unpackRgb(color.getRGB()).toVector3f(), 1f);
+//                    this.world.addParticle(particleEffect, true, spawnPos.getX() + 0.5, spawnPos.getY() + 3, spawnPos.getZ() + 0.5, 0, 0, 0);
+//
+//                    color = Color.orange;
+//                    particleEffect = new DebugWaveMovementParticle.DebugWaveMovementParticleEffect(Vec3d.unpackRgb(color.getRGB()).toVector3f(), 1f);
+//                    this.world.addParticle(particleEffect, true, targetPos.getX() + 0.5, targetPos.getY() + 3, targetPos.getZ() + 0.5, 0, 0, 0);
+//                }
 
 //                Color color = Color.LIGHT_GRAY;
 //                ParticleEffect particleEffect = new DebugWaveMovementParticle.DebugWaveMovementParticleEffect(Vec3d.unpackRgb(color.getRGB()).toVector3f(), 1f);
 //                for (BlockPos pos : this.waterBodyHandler.closestShore.values()) {
 //                    this.world.addParticle(particleEffect, true, pos.getX() + 0.5, pos.getY() + 2, pos.getZ() + 0.5, 0, 0, 0);
 //                }
-            }
+//            }
         }
     }
 

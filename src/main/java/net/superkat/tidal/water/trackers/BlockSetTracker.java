@@ -1,4 +1,4 @@
-package net.superkat.tidal.water;
+package net.superkat.tidal.water.trackers;
 
 import it.unimi.dsi.fastutil.longs.Long2ReferenceArrayMap;
 import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
