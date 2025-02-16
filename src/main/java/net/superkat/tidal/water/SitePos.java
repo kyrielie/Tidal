@@ -1,17 +1,16 @@
-package net.superkat.tidal.water.trackers;
+package net.superkat.tidal.water;
 
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import net.minecraft.util.math.BlockPos;
 
 public class SitePos {
     public BlockPos pos;
-//    public BlockPos center;
     public int centerX = 0;
     public int centerZ = 0;
     public float yaw = 0f;
     public boolean yawCalculated = false;
 
-    //cache x's and z's
+    //cache x's and z's - stored as ints for speed
     public IntArrayList xList = new IntArrayList();
     public IntArrayList zList = new IntArrayList();
 
@@ -45,6 +44,20 @@ public class SitePos {
     public void updateYaw() {
         this.yawCalculated = true;
         this.yaw = (float) Math.toDegrees(Math.atan2(pos.getZ() - centerZ, pos.getX() - centerX));
+    }
+
+    public float getYaw() {
+        return this.yaw;
+    }
+
+    /**
+     * @return The yaw of this site's yaw, formatted the same way as the F3 debug screen's yaw(-180 through 180 degrees)
+     */
+    public float getYawAsF3Angle() {
+        float angle = this.getYaw() - 90;
+        if(angle < 0) angle += 360;
+        if(angle > 180) angle -= 360;
+        return angle;
     }
 
     public BlockPos getPos() {

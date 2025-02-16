@@ -8,8 +8,8 @@ import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.util.Identifier;
 import net.superkat.tidal.duck.TidalWorld;
-import net.superkat.tidal.particles.debug.DebugShorelineParticle;
-import net.superkat.tidal.particles.debug.DebugWaterBodyParticle;
+import net.superkat.tidal.particles.debug.DebugShoreParticle;
+import net.superkat.tidal.particles.debug.DebugWaterParticle;
 import net.superkat.tidal.particles.debug.DebugWaveMovementParticle;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,13 +18,13 @@ public class Tidal implements ModInitializer {
 	public static final String MOD_ID = "tidal";
 	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
-	public static final ParticleType<DebugWaterBodyParticle.DebugWaterBodyParticleEffect> DEBUG_WATERBODY_PARTICLE = FabricParticleTypes.complex(
-			DebugWaterBodyParticle.DebugWaterBodyParticleEffect.CODEC,
-			DebugWaterBodyParticle.DebugWaterBodyParticleEffect.PACKET_CODEC
+	public static final ParticleType<DebugWaterParticle.DebugWaterParticleEffect> DEBUG_WATERBODY_PARTICLE = FabricParticleTypes.complex(
+			DebugWaterParticle.DebugWaterParticleEffect.CODEC,
+			DebugWaterParticle.DebugWaterParticleEffect.PACKET_CODEC
 	);
-	public static final ParticleType<DebugShorelineParticle.DebugShorelineParticleEffect> DEBUG_SHORELINE_PARTICLE = FabricParticleTypes.complex(
-			DebugShorelineParticle.DebugShorelineParticleEffect.CODEC,
-			DebugShorelineParticle.DebugShorelineParticleEffect.PACKET_CODEC
+	public static final ParticleType<DebugShoreParticle.DebugShoreParticleEffect> DEBUG_SHORELINE_PARTICLE = FabricParticleTypes.complex(
+			DebugShoreParticle.DebugShoreParticleEffect.CODEC,
+			DebugShoreParticle.DebugShoreParticleEffect.PACKET_CODEC
 	);
 	public static final ParticleType<DebugWaveMovementParticle.DebugWaveMovementParticleEffect> DEBUG_WAVEMOVEMENT_PARTICLE = FabricParticleTypes.complex(
 			DebugWaveMovementParticle.DebugWaveMovementParticleEffect.CODEC,

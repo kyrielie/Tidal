@@ -17,9 +17,9 @@ import net.minecraft.util.dynamic.Codecs;
 import net.superkat.tidal.Tidal;
 import org.joml.Vector3f;
 
-public class DebugShorelineParticle extends DebugAbstractColoredParticle<DebugShorelineParticle.DebugShorelineParticleEffect> {
+public class DebugShoreParticle extends DebugAbstractColoredParticle<DebugShoreParticle.DebugShoreParticleEffect> {
 
-    public DebugShorelineParticle(ClientWorld world, double x, double y, double z, double velocityX, double velocityY, double velocityZ, DebugShorelineParticleEffect parameters, SpriteProvider spriteProvider) {
+    public DebugShoreParticle(ClientWorld world, double x, double y, double z, double velocityX, double velocityY, double velocityZ, DebugShoreParticleEffect parameters, SpriteProvider spriteProvider) {
         super(world, x, y, z, velocityX, velocityY, velocityZ, parameters, spriteProvider);
         this.red = this.darken(parameters.color.x(), 0.8f);
         this.green = this.darken(parameters.color.y(), 0.8f);
@@ -27,37 +27,37 @@ public class DebugShorelineParticle extends DebugAbstractColoredParticle<DebugSh
     }
 
     @Environment(EnvType.CLIENT)
-    public static class Factory implements ParticleFactory<DebugShorelineParticleEffect> {
+    public static class Factory implements ParticleFactory<DebugShoreParticleEffect> {
         private final SpriteProvider spriteProvider;
 
         public Factory(SpriteProvider spriteProvider) {
             this.spriteProvider = spriteProvider;
         }
 
-        public Particle createParticle(DebugShorelineParticleEffect dustParticleEffect, ClientWorld clientWorld, double d, double e, double f, double g, double h, double i) {
-            return new DebugShorelineParticle(clientWorld, d, e, f, g, h, i, dustParticleEffect, this.spriteProvider);
+        public Particle createParticle(DebugShoreParticleEffect dustParticleEffect, ClientWorld clientWorld, double d, double e, double f, double g, double h, double i) {
+            return new DebugShoreParticle(clientWorld, d, e, f, g, h, i, dustParticleEffect, this.spriteProvider);
         }
     }
 
-    public static class DebugShorelineParticleEffect extends AbstractDustParticleEffect {
-        public static final MapCodec<DebugShorelineParticleEffect> CODEC = RecordCodecBuilder.mapCodec(
+    public static class DebugShoreParticleEffect extends AbstractDustParticleEffect {
+        public static final MapCodec<DebugShoreParticleEffect> CODEC = RecordCodecBuilder.mapCodec(
                 instance -> instance.group(
                                 Codecs.VECTOR_3F.fieldOf("color").forGetter(effect -> effect.color), SCALE_CODEC.fieldOf("scale").forGetter(AbstractDustParticleEffect::getScale)
                         )
-                        .apply(instance, DebugShorelineParticleEffect::new)
+                        .apply(instance, DebugShoreParticleEffect::new)
         );
-        public static final PacketCodec<RegistryByteBuf, DebugShorelineParticleEffect> PACKET_CODEC = PacketCodec.tuple(
-                PacketCodecs.VECTOR3F, effect -> effect.color, PacketCodecs.FLOAT, AbstractDustParticleEffect::getScale, DebugShorelineParticleEffect::new
+        public static final PacketCodec<RegistryByteBuf, DebugShoreParticleEffect> PACKET_CODEC = PacketCodec.tuple(
+                PacketCodecs.VECTOR3F, effect -> effect.color, PacketCodecs.FLOAT, AbstractDustParticleEffect::getScale, DebugShoreParticleEffect::new
         );
         private final Vector3f color;
 
-        public DebugShorelineParticleEffect(Vector3f color, float scale) {
+        public DebugShoreParticleEffect(Vector3f color, float scale) {
             super(scale);
             this.color = color;
         }
 
         @Override
-        public ParticleType<DebugShorelineParticleEffect> getType() {
+        public ParticleType<DebugShoreParticleEffect> getType() {
             return Tidal.DEBUG_SHORELINE_PARTICLE;
         }
     }

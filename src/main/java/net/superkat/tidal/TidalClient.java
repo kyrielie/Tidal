@@ -9,16 +9,16 @@ import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.client.MinecraftClient;
 import net.superkat.tidal.duck.TidalWorld;
 import net.superkat.tidal.event.ClientBlockUpdateEvent;
-import net.superkat.tidal.particles.debug.DebugShorelineParticle;
-import net.superkat.tidal.particles.debug.DebugWaterBodyParticle;
+import net.superkat.tidal.particles.debug.DebugShoreParticle;
+import net.superkat.tidal.particles.debug.DebugWaterParticle;
 import net.superkat.tidal.particles.debug.DebugWaveMovementParticle;
 
 public class TidalClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
-        ParticleFactoryRegistry.getInstance().register(Tidal.DEBUG_WATERBODY_PARTICLE, DebugWaterBodyParticle.Factory::new);
-        ParticleFactoryRegistry.getInstance().register(Tidal.DEBUG_SHORELINE_PARTICLE, DebugShorelineParticle.Factory::new);
+        ParticleFactoryRegistry.getInstance().register(Tidal.DEBUG_WATERBODY_PARTICLE, DebugWaterParticle.Factory::new);
+        ParticleFactoryRegistry.getInstance().register(Tidal.DEBUG_SHORELINE_PARTICLE, DebugShoreParticle.Factory::new);
         ParticleFactoryRegistry.getInstance().register(Tidal.DEBUG_WAVEMOVEMENT_PARTICLE, DebugWaveMovementParticle.Factory::new);
 
         //Called after joining a world, or changing dimensions
@@ -42,7 +42,7 @@ public class TidalClient implements ClientModInitializer {
             MinecraftClient client = MinecraftClient.getInstance();
             if(client.world == null || client.player == null) return;
             TidalWorld tidalWorld = (TidalWorld) client.world;
-            tidalWorld.tidal$tidalWaveHandler().waterBodyHandler.updateBlock(pos, state);
+            tidalWorld.tidal$tidalWaveHandler().waterBodyHandler.onBlockUpdate(pos, state);
         });
 
         //Called when the chunks are reloaded(f3+a, resource pack change, etc.)

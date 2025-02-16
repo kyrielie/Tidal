@@ -5,19 +5,17 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.fluid.FluidState;
-import net.minecraft.item.Items;
 import net.minecraft.registry.tag.FluidTags;
-import net.minecraft.sound.SoundEvents;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.random.Random;
 import net.minecraft.world.chunk.WorldChunk;
 import net.superkat.tidal.config.TidalConfig;
+import net.superkat.tidal.water.DebugHelper;
+import net.superkat.tidal.water.SitePos;
 import net.superkat.tidal.water.WaterBodyHandler;
-import net.superkat.tidal.water.trackers.SitePos;
 
-import java.awt.*;
 import java.util.List;
 
 /**
@@ -70,7 +68,7 @@ public class TidalWaveHandler {
     }
 
     public void debugTick(MinecraftClient client, ClientPlayerEntity player) {
-        if(shouldDebugTick()) {
+        if(DebugHelper.usingSpyglass()) {
             waveTicks++;
 
             BlockPos playerPos = player.getBlockPos();
@@ -80,10 +78,7 @@ public class TidalWaveHandler {
                 long chunkPosL = new ChunkPos(playerPos).toLong();
                 SitePos site = this.waterBodyHandler.siteCache.get(chunkPosL).get(playerPos);
                 if(client.world.getTime() % 20 == 0) {
-                    float yaw = site.yaw - 90;
-                    if(yaw < 0) yaw += 360;
-                    if(yaw > 180) yaw -= 360;
-                    System.out.println(yaw);
+                    System.out.println(site.getYawAsF3Angle());
                 }
             }
 
@@ -134,37 +129,6 @@ public class TidalWaveHandler {
 //                }
 //            }
         }
-    }
-
-    private Color randomDebugColor() {
-        Random random = getRandom();
-        int rgbIncrease = random.nextBetween(1, 3);
-        int red = rgbIncrease == 1 ? random.nextBetween(150, 255) : 255;
-        int green = rgbIncrease == 2 ? random.nextBetween(150, 255) : 255;
-        int blue = rgbIncrease == 3 ? random.nextBetween(150, 255) : 255;
-        return new Color(red, green, blue);
-    }
-
-    public static boolean shouldDebugTick() {
-        MinecraftClient client = MinecraftClient.getInstance();
-        ClientPlayerEntity player = client.player;
-        if(player.getActiveItem().isOf(Items.SPYGLASS) && player.getItemUseTime() >= 10) {
-            if(player.getItemUseTime() == 10) {
-                player.playSound(SoundEvents.BLOCK_AMETHYST_BLOCK_RESONATE, 1f, 1f);
-            }
-            return true;
-        }
-        return false;
-    }
-
-    public static boolean altShouldDebugTick() {
-        MinecraftClient client = MinecraftClient.getInstance();
-        ClientPlayerEntity player = client.player;
-       if(player.getActiveItem().isOf(Items.SHIELD) && (player.getItemUseTime() == 1 || player.isSneaking())) {
-            player.playSound(SoundEvents.BLOCK_AMETHYST_BLOCK_RESONATE, 1f, 1f);
-            return true;
-        }
-        return false;
     }
 
     /**
