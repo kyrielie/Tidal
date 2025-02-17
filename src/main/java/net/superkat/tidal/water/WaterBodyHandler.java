@@ -93,12 +93,11 @@ public class WaterBodyHandler {
 
     //idea: if no site is within configurable distance, that water is considered open ocean and extra effects can be added there
 
+    //TODO - any cleanup, redo javadocs lol ( ͡• ͜ʖ ͡• )
+    //TODO - possibly change build to use the tick scanners method instead of doing it all itself?
     //TODO - make it so that the scanners map clears finished chunks to free up memory (surprisingly difficult to do)
-    //TODO - replace anyScannerActive with any scanner active within a configurable chunk radius
 
     //FIXME - init build doesn't get all nearby chunks(reload build scans more chunks than join build)
-
-    //TODO - test movement particle
 
     public WaterBodyHandler(ClientWorld world, TidalWaveHandler tidalWaveHandler) {
         this.world = world;
@@ -114,13 +113,14 @@ public class WaterBodyHandler {
             built = build();
         }
 
-        if(built && !anyScannerActive) {
-            boolean noMoreWaitingWaterBlocks = tickWaitingWaterBlocks();
-            if(noMoreWaitingWaterBlocks && recalcSiteCenters) {
+        if(built) {
+            boolean noMoreWaitingBlocks = tickWaitingWaterBlocks(false);
+            if(noMoreWaitingBlocks && recalcSiteCenters) {
                 this.calcSiteCenters();
-                recalcSiteCenters = false;
+                this.recalcSiteCenters = false;
             }
         }
+
         tickScheduledScanners(player);
 
         debugTick(client, player);
@@ -139,6 +139,9 @@ public class WaterBodyHandler {
         Set<SitePos> siteSet;
         long chunkPosL = new ChunkPos(pos).toLong();
         if(this.sites.get(chunkPosL) != null) {
+            //FIXME - this can cause a bug where, if there is a SitePos in the same chunk, but pretty much across the entire chunk,
+            // and there's a SitePos closer, but in the neighbouring chunk, it is assumed to be closer to the SitePos
+            // in the same chunk instead of knowing there's one closer block-wise, but in the neighbouring chunk.
             siteSet = this.sites.get(chunkPosL);
         } else {
             siteSet = this.sites.values().stream().flatMap(Collection::stream).collect(Collectors.toSet());
@@ -183,52 +186,14 @@ public class WaterBodyHandler {
         if(this.world.getTime() % 10 != 0) return;
         boolean farParticles = false;
 
-//        if(player.getMainHandStack().isOf(Items.COMPASS)) {
-//            for (WaterBody waterBody : this.waterBodies) {
-//                for (Map.Entry<Long, BlockSetTracker.TrackedChunk> entry : waterBody.chunkedBlocks.entrySet()) {
-//                    Long aLong = entry.getKey();
-//                    BlockSetTracker.TrackedChunk trackedChunk = entry.getValue();
-//                    if(!trackedChunk.shouldMergeYaw) continue;
-//                    ChunkPos cpos = new ChunkPos(aLong);
-//                    int x = cpos.x;
-//                    int z = cpos.z;
-//                    BlockSetTracker.TrackedChunk[] neighbours = new BlockSetTracker.TrackedChunk[]{
-//                            waterBody.chunkedBlocks.get(new ChunkPos(x + 1, z).toLong()),
-//                            waterBody.chunkedBlocks.get(new ChunkPos(x - 1, z).toLong()),
-//                            waterBody.chunkedBlocks.get(new ChunkPos(x, z + 1).toLong()),
-//                            waterBody.chunkedBlocks.get(new ChunkPos(x, z - 1).toLong())
-//                    };
-//
-//                    float totalYaw = trackedChunk.getYaw();
-//                    int addedYaws = 1;
-//
-//                    for (BlockSetTracker.TrackedChunk n : neighbours) {
-//                        if(n == null) continue;
-//                        if(!n.shouldMergeYaw) continue;
-//                        totalYaw += n.getYaw();
-//                        addedYaws++;
-//                    }
-//
-//                    if(addedYaws != 1) totalYaw /= addedYaws;
-//                    BlockPos pos = new ChunkPos(aLong).getCenterAtY(67);
-//                    Direction direction = Direction.fromRotation(totalYaw);
-//                    BlockPos pos2 = pos.offset(direction);
-//
-//                    this.world.addParticle(ParticleTypes.WAX_OFF, pos.getX(), pos.getY(), pos.getZ(), 0, 0, 0);
-//                    this.world.addParticle(ParticleTypes.NAUTILUS, pos2.getX(), pos2.getY(), pos2.getZ(), pos.getX() - pos2.getX(), 0, pos.getZ() - pos2.getZ());
-//                    this.world.addParticle(ParticleTypes.WAX_ON, pos2.getX(), pos2.getY(), pos2.getZ(), 0, 0, 0);
-//
-//                    if(player.isSneaking()) {
-//                        if(aLong == player.getChunkPos().toLong()) {
-//                            System.out.println(totalYaw);
-//                        }
-//                    }
-//
-//                }
-//            }
-//        }
+        //display all shoreline blocks
+        //display all sitePos'
+        List<SitePos> allSites = this.sites.values().stream().flatMap(Collection::stream).toList();
+        for (SitePos site : allSites) {
+            this.world.addParticle(ParticleTypes.EGG_CRACK, true, site.getX() + 0.5, site.getY() + 2, site.getZ() + 0.5, 0, 0, 0);
+        }
 
-//        int i = 0;
+        if(!DebugHelper.spyglassInHotbar()) return;
 
         //display all shoreline blocks
         List<BlockPos> allShoreBLocks = this.shoreBlocks.values().stream().flatMap(Collection::stream).toList();
@@ -236,12 +201,6 @@ public class WaterBodyHandler {
         for (BlockPos shore : allShoreBLocks) {
             Vec3d pos = shore.toCenterPos();
             this.world.addParticle(shoreEffect, pos.getX(), pos.getY() + 1, pos.getZ(), 0, 0, 0);
-        }
-
-        //display all sitePos'
-        List<SitePos> allSites = this.sites.values().stream().flatMap(Collection::stream).toList();
-        for (SitePos site : allSites) {
-            this.world.addParticle(ParticleTypes.EGG_CRACK, true, site.getX() + 0.5, site.getY() + 2, site.getZ() + 0.5, 0, 0, 0);
         }
 
         //display all water blocks pos', colored by closest site
@@ -311,7 +270,7 @@ public class WaterBodyHandler {
         long siteCacheTime = Util.getMeasuringTimeMs();
         boolean blocksWaiting = true;
         while(blocksWaiting) { //cursed but okay
-            blocksWaiting = !tickWaitingWaterBlocks();
+            blocksWaiting = !tickWaitingWaterBlocks(true);
         }
         Tidal.LOGGER.info("Site cache time: {} ms", Util.getMeasuringTimeMs() - siteCacheTime);
 
@@ -343,6 +302,7 @@ public class WaterBodyHandler {
     public void tickScheduledScanners(ClientPlayerEntity player) {
         BlockPos playerPos = player.getBlockPos();
         int chunkRadius = this.tidalWaveHandler.getChunkRadius(); //caching this call might help?
+        anyScannerActive = false;
         for (Map.Entry<Long, ChunkScanner> entry : this.scanners.sequencedEntrySet()) {
             if (entry.getValue() == null) continue;
 
@@ -369,12 +329,15 @@ public class WaterBodyHandler {
      *
      * @return True if there are no more waiting water blocks
      */
-    public boolean tickWaitingWaterBlocks() {
+    public boolean tickWaitingWaterBlocks(boolean assumeFullScan) {
         Iterator<Map.Entry<Long, ObjectArrayFIFOQueue<BlockPos>>> iterator = this.waitingWaterBlocks.sequencedEntrySet().iterator();
 
         while(iterator.hasNext()) {
             Map.Entry<Long, ObjectArrayFIFOQueue<BlockPos>> entry = iterator.next();
             if(entry.getValue() == null) continue;
+            long chunkPosL = entry.getKey();
+            //the nearbyScannersFinished call could probably be optimized?
+            if (!assumeFullScan && !nearbyScannersFinished(chunkPosL)) continue;
 
             ObjectArrayFIFOQueue<BlockPos> queue = entry.getValue();
             boolean finished = false;
@@ -389,12 +352,29 @@ public class WaterBodyHandler {
 
             if(finished || queue.size() <= 0) {
                 iterator.remove();
-                MinecraftClient.getInstance().player.playSound(SoundEvents.BLOCK_VAULT_ACTIVATE, 0.1f, 1f);
                 recalcSiteCenters = true;
+                MinecraftClient.getInstance().player.playSound(SoundEvents.BLOCK_VAULT_ACTIVATE, 0.1f, 1f);
             }
         }
 
         return this.waitingWaterBlocks.isEmpty();
+    }
+
+    public boolean nearbyScannersFinished(long chunkPosL) {
+        int radius = 3; //will be configurable later
+        ChunkPos pos = new ChunkPos(chunkPosL);
+        ChunkPos start = new ChunkPos(pos.x + radius, pos.z + radius);
+        ChunkPos end = new ChunkPos(pos.x - radius, pos.z - radius);
+
+        BlockPos playerPos = MinecraftClient.getInstance().player.getBlockPos();
+        int chunkRadius = this.tidalWaveHandler.getChunkRadius();
+
+        for (ChunkPos checkPos : ChunkPos.stream(start, end).toList()) {
+            long checkPosL = checkPos.toLong();
+            if(!scannerInDistance(playerPos, checkPosL, chunkRadius)) continue;
+            if(scanners.get(checkPosL) != null) return false;
+        }
+        return true;
     }
 
     //I feel comfortable doing this because this calculation is usually only taken 1-3ms for me

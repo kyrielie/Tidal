@@ -2,6 +2,7 @@ package net.superkat.tidal.water;
 
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
+import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.Items;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.util.math.random.Random;
@@ -27,6 +28,14 @@ public class DebugHelper {
         return false;
     }
 
+    //yes this is importa-ha-nt
+    public static boolean spyglassInHotbar() {
+        MinecraftClient client = MinecraftClient.getInstance();
+        ClientPlayerEntity player = client.player;
+        PlayerInventory playerInventory = player.getInventory();
+        return PlayerInventory.isValidHotbarIndex(playerInventory.getSlotWithStack(Items.SPYGLASS.getDefaultStack()));
+    }
+
     public static boolean usingShield() {
         MinecraftClient client = MinecraftClient.getInstance();
         ClientPlayerEntity player = client.player;
@@ -41,6 +50,12 @@ public class DebugHelper {
         MinecraftClient client = MinecraftClient.getInstance();
         ClientPlayerEntity player = client.player;
         return player.getMainHandStack().isOf(Items.COMPASS);
+    }
+
+    public static boolean offhandCompass() {
+        MinecraftClient client = MinecraftClient.getInstance();
+        ClientPlayerEntity player = client.player;
+        return player.getOffHandStack().isOf(Items.COMPASS);
     }
 
     //sick

@@ -32,6 +32,7 @@ public class SitePos {
     }
 
     public void updateCenter() {
+        if(xList.isEmpty() || zList.isEmpty()) return;
         int xSize = this.xList.size();
         this.centerX = this.xList.intStream().sum() / xSize;
 
