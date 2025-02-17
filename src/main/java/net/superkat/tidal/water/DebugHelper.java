@@ -37,6 +37,12 @@ public class DebugHelper {
         return false;
     }
 
+    public static boolean holdingCompass() {
+        MinecraftClient client = MinecraftClient.getInstance();
+        ClientPlayerEntity player = client.player;
+        return player.getMainHandStack().isOf(Items.COMPASS);
+    }
+
     //sick
     //This method was redone an embarrassing amount of times to get nice looking colors
     public static Color debugColor(int i, int size) {

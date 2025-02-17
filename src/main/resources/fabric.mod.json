@@ -25,6 +25,7 @@
 	"mixins": [
 		"tidal.mixins.json"
 	],
+	"accessWidener": "tidal.accesswidener",
 	"depends": {
 		"fabricloader": ">=0.16.10",
 		"minecraft": "~1.21.1",

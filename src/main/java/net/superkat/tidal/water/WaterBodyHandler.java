@@ -91,9 +91,14 @@ public class WaterBodyHandler {
     //Each block will be a key with a site pos, sorted via chunks(siteCache) (this is the version of regions)
     //water bodies will be replaced with these regions. Some of them can still be pretty big, and probably provide more accurate size data per area anyways.
 
-    //TODO - get all nearby loaded chunks to allow for scanners to have chunk scanners removed to save memory(AW serverDistance)
-    //TODO - improve consistency of anyScannerActive after above ^^^ todo
+    //idea: if no site is within configurable distance, that water is considered open ocean and extra effects can be added there
+
+    //TODO - make it so that the scanners map clears finished chunks to free up memory (surprisingly difficult to do)
+    //TODO - replace anyScannerActive with any scanner active within a configurable chunk radius
+
     //FIXME - init build doesn't get all nearby chunks(reload build scans more chunks than join build)
+
+    //TODO - test movement particle
 
     public WaterBodyHandler(ClientWorld world, TidalWaveHandler tidalWaveHandler) {
         this.world = world;
@@ -109,7 +114,7 @@ public class WaterBodyHandler {
             built = build();
         }
 
-        if(!anyScannerActive) {
+        if(built && !anyScannerActive) {
             boolean noMoreWaitingWaterBlocks = tickWaitingWaterBlocks();
             if(noMoreWaitingWaterBlocks && recalcSiteCenters) {
                 this.calcSiteCenters();
@@ -158,7 +163,7 @@ public class WaterBodyHandler {
      * Cache and or return the closest SitePos of a BlockPos(assumed to be, but technically doesn't have to be, a water block).
      *
      * @param pos BlockPos to use for finding the closest SitePos.
-     * @return The BlockPos' closest SitePos.
+     * @return The BlockPos' closest SitePos, or {@link BlockPos#ORIGIN} if the site is null.
      */
     public BlockPos getSiteForPos(BlockPos pos) {
         long chunkPosL = new ChunkPos(pos).toLong();
@@ -236,7 +241,7 @@ public class WaterBodyHandler {
         //display all sitePos'
         List<SitePos> allSites = this.sites.values().stream().flatMap(Collection::stream).toList();
         for (SitePos site : allSites) {
-            this.world.addParticle(ParticleTypes.EGG_CRACK, true, site.getX() + 0.5, site.getY() + 4, site.getZ() + 0.5, 0, 0, 0);
+            this.world.addParticle(ParticleTypes.EGG_CRACK, true, site.getX() + 0.5, site.getY() + 2, site.getZ() + 0.5, 0, 0, 0);
         }
 
         //display all water blocks pos', colored by closest site
@@ -284,19 +289,24 @@ public class WaterBodyHandler {
         Tidal.LOGGER.info("-=+=========================+=-");
 
         long scannerTime = Util.getMeasuringTimeMs();
+        int chunksScanned = 0;
         for (ChunkScanner scanner : this.scanners.values()) {
-            if(scanner == null) continue;
+            if (scanner == null) continue;
 //            long scannerStartTime = Util.getMeasuringTimeMs();
+
+            chunksScanned++;
             while (!scanner.isFinished()) {
                 scanner.tick();
-                if(scanner.isFinished()) {
+                if (scanner.isFinished()) {
                     scanners.put(scanner.chunkPos.toLong(), null);
                     MinecraftClient.getInstance().player.playSound(SoundEvents.ITEM_TRIDENT_HIT_GROUND, 0.05f, 1f);
 //                    Tidal.LOGGER.info("Scanner time: {} ms", Util.getMeasuringTimeMs() - scannerStartTime);
                 }
             }
         }
+
         Tidal.LOGGER.info("Total scan time: {} ms", Util.getMeasuringTimeMs() - scannerTime);
+        Tidal.LOGGER.info("Chunks scanned: {}", chunksScanned);
 
         long siteCacheTime = Util.getMeasuringTimeMs();
         boolean blocksWaiting = true;
@@ -332,12 +342,12 @@ public class WaterBodyHandler {
 
     public void tickScheduledScanners(ClientPlayerEntity player) {
         BlockPos playerPos = player.getBlockPos();
-        int chunkRadius = TidalConfig.chunkRadius; //caching this call might help?
+        int chunkRadius = this.tidalWaveHandler.getChunkRadius(); //caching this call might help?
         for (Map.Entry<Long, ChunkScanner> entry : this.scanners.sequencedEntrySet()) {
-            if(entry.getValue() == null) continue;
+            if (entry.getValue() == null) continue;
 
             long chunkPosL = entry.getKey();
-            if(!scannerInDistance(playerPos, chunkPosL, chunkRadius)) continue;
+            if (!scannerInDistance(playerPos, chunkPosL, chunkRadius)) continue;
             anyScannerActive = true;
 
             ChunkScanner scanner = entry.getValue();
@@ -345,7 +355,7 @@ public class WaterBodyHandler {
                 scanner.tick();
             }
 
-            if(scanner.isFinished()) {
+            if (scanner.isFinished()) {
                 anyScannerActive = false; //gets set back to true during the loop here, if it is the last one then oh well
                 scanners.put(chunkPosL, null);
                 MinecraftClient.getInstance().player.playSound(SoundEvents.ITEM_TRIDENT_HIT_GROUND, 0.25f, 1f);
@@ -380,7 +390,6 @@ public class WaterBodyHandler {
             if(finished || queue.size() <= 0) {
                 iterator.remove();
                 MinecraftClient.getInstance().player.playSound(SoundEvents.BLOCK_VAULT_ACTIVATE, 0.1f, 1f);
-            } else {
                 recalcSiteCenters = true;
             }
         }
@@ -393,6 +402,7 @@ public class WaterBodyHandler {
         for (SitePos site : this.sites.values().stream().flatMap(Collection::stream).toList()) {
             site.updateCenter();
         }
+        MinecraftClient.getInstance().player.playSound(SoundEvents.ENTITY_WARDEN_SONIC_BOOM, 0.3f, 1f);
     }
 
     public boolean scannerInDistance(BlockPos playerBlockPos, long chunkPosL, int chunkRadius) {
@@ -404,12 +414,12 @@ public class WaterBodyHandler {
     }
 
     /**
-     * Schedules a chunk to be scanned water blocks, shoreblocks, sites, etc.
+     * Schedules a chunk to be scanned water blocks, shoreblocks, sites, etc. Called when a new chunk is loaded.
      *
      * @param chunk Chunk to schedule
      * @see WaterBodyHandler#scheduleChunkScanner(ChunkPos)
      */
-    public void scheduleChunk(Chunk chunk) {
+    public void addChunk(Chunk chunk) {
         scheduleChunkScanner(chunk.getPos());
     }
 
@@ -417,7 +427,7 @@ public class WaterBodyHandler {
      * Schedules a chunk to be scanned for water blocks, shoreblocks, sites, etc.
      *
      * @param chunkPos ChunkPos of the chunk to be scanned
-     * @see WaterBodyHandler#scheduleChunk(Chunk)
+     * @see WaterBodyHandler#addChunk(Chunk)
      */
     public void scheduleChunkScanner(ChunkPos chunkPos) {
         long pos = chunkPos.toLong();
@@ -433,7 +443,7 @@ public class WaterBodyHandler {
      */
     public boolean rescheduleChunkScanner(ChunkPos chunkPos) {
         long chunkPosL = chunkPos.toLong();
-        if (this.scanners.get(chunkPosL) != null) return false;
+//        if (this.scanners.get(chunkPosL) != null) return false;
         this.scheduleChunkScanner(chunkPos);
         this.removeChunkFromTrackers(chunkPosL);
         return true;

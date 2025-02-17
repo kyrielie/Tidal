@@ -29,7 +29,7 @@ public class TidalClient implements ClientModInitializer {
 
         ClientChunkEvents.CHUNK_LOAD.register((world, chunk) -> {
             TidalWorld tidalWorld = (TidalWorld) world;
-            tidalWorld.tidal$tidalWaveHandler().waterBodyHandler.scheduleChunk(chunk);
+            tidalWorld.tidal$tidalWaveHandler().waterBodyHandler.addChunk(chunk);
         });
 
         ClientChunkEvents.CHUNK_UNLOAD.register((world, chunk) -> {

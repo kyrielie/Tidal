@@ -1,5 +1,6 @@
 package net.superkat.tidal;
 
+import com.google.common.collect.Sets;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
@@ -17,6 +18,7 @@ import net.superkat.tidal.water.SitePos;
 import net.superkat.tidal.water.WaterBodyHandler;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * Used for handling when tidal waves should spawn, as well as ticking the {@link WaterBodyHandler}
@@ -37,21 +39,65 @@ public class TidalWaveHandler {
         this.nearbyChunksLoaded = false;
     }
 
-    public boolean nearbyChunksLoaded(ClientPlayerEntity player, int chunkRadius) {
+    //This isn't perfect, but its close enough I suppose
+    public boolean nearbyChunksLoaded(ClientPlayerEntity player) {
         if(nearbyChunksLoaded) return true;
-        //i really have no clue why 8 is being used(or where I got that) instead of 16, but using 16 breaks it so ¯\_(ツ)_/¯
-        int radius = chunkRadius * 8;
+        int chunkRadius = getChunkRadius();
 
         //using WorldChunk instead of chunk because it has "isEmpty" method
         //could use chunk instanceof EmptyChunk instead, but this felt better
-        BlockPos playerPos = player.getBlockPos();
+        int chunkX = player.getChunkPos().x;
+        int chunkZ = player.getChunkPos().z;
+        int chunkRadiusReduced = chunkRadius - (chunkRadius / 3);
+
         List<WorldChunk> checkChunks = List.of(
-                world.getWorldChunk(playerPos.add(radius, 0, radius)),
-                world.getWorldChunk(playerPos.add(-radius, 0, radius)),
-                world.getWorldChunk(playerPos.add(-radius, 0, -radius)),
-                world.getWorldChunk(playerPos.add(radius, 0, -radius))
+                world.getChunk(chunkX + chunkRadius, chunkZ),
+                world.getChunk(chunkX - chunkRadius, chunkZ),
+                world.getChunk(chunkX, chunkZ + chunkRadius),
+                world.getChunk(chunkX, chunkZ - chunkRadius),
+                world.getChunk(chunkX + (chunkRadiusReduced), chunkZ + (chunkRadiusReduced)),
+                world.getChunk(chunkX - (chunkRadiusReduced), chunkZ + (chunkRadiusReduced)),
+                world.getChunk(chunkX - (chunkRadiusReduced), chunkZ - (chunkRadiusReduced)),
+                world.getChunk(chunkX + (chunkRadiusReduced), chunkZ - (chunkRadiusReduced))
         );
         return checkChunks.stream().noneMatch(WorldChunk::isEmpty);
+//        return MinecraftClient.getInstance().worldRenderer.isTerrainRenderComplete();
+    }
+
+    //Gets all loaded nearby chunks - created using ClientChunkManager & ClientChunkManager.ClientChunkMap
+    public Set<ChunkPos> getNearbyChunkPos() {
+        MinecraftClient client = MinecraftClient.getInstance();
+        ClientPlayerEntity player = client.player;
+        ChunkPos playerPos = player.getChunkPos();
+        int playerX = playerPos.x;
+        int playerZ = playerPos.z;
+
+        int radius = getLoadedChunkRadius();
+        ChunkPos start = new ChunkPos(playerX + radius, playerZ + radius);
+        ChunkPos end = new ChunkPos(playerX - radius, playerZ - radius);
+
+        Set<ChunkPos> loadedChunks = Sets.newHashSet();
+        for (ChunkPos chunkPos : ChunkPos.stream(start, end).toList()) {
+            WorldChunk chunk = this.world.getChunk(chunkPos.x, chunkPos.z);
+            if(chunk.isEmpty()) continue;
+            loadedChunks.add(chunkPos);
+        }
+
+        return loadedChunks;
+    }
+
+    public int getChunkRadius() {
+        MinecraftClient client = MinecraftClient.getInstance();
+        int configRadius = TidalConfig.chunkRadius;
+        int serverRadius = client.options.serverViewDistance;
+
+        return Math.min(configRadius, serverRadius);
+    }
+
+    public int getLoadedChunkRadius() {
+        MinecraftClient client = MinecraftClient.getInstance();
+        int loadRadius = client.options.serverViewDistance;
+        return Math.max(2, loadRadius) + 3;
     }
 
     public void tick() {
@@ -59,8 +105,10 @@ public class TidalWaveHandler {
         ClientPlayerEntity player = client.player;
         assert player != null;
 
+        getNearbyChunkPos();
+
         if(!this.nearbyChunksLoaded) {
-            this.nearbyChunksLoaded = nearbyChunksLoaded(player, TidalConfig.chunkRadius);
+            this.nearbyChunksLoaded = nearbyChunksLoaded(player);
         }
 
         waterBodyHandler.tick();
