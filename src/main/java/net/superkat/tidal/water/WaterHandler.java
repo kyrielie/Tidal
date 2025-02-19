@@ -33,22 +33,39 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Used to handle(find/create, merge, delete) and tick water bodies.
+ * Handles water/shoreline blocks & SitePos'
  * <br><br>
- * How this goofy thing works: <br>
- * The {@link WaterBodyHandler#scanners} holds a map of {@link ChunkPos} as longs & {@link ChunkScanner}, making each scanner linked to a ChunkPos.<br><br>
- * {@link WaterBodyHandler#scheduleChunkScanner(ChunkPos)} schedules a chunk scanner, <b>called once a chunk is loaded</b>, which will begin ticking in the {@link WaterBodyHandler#tickScheduledScanners(ClientPlayerEntity)} method. Each scanner gets ticked 10 times per client tick, which was done to reduce the amount of lag per chunk load(instead of scanning the entire chunk during chunk load). <br><br>
- * A ChunkScanner scans a single chunk, creating WaterBodies and Shorelines which get added here upon their creation(in their tick method).<br><br>
- * Once the ChunkScanner is finished, its value in the scanners map <b>is set to null</b>, meaning the <b>ChunkPos long key still exists</b>. This was done to allow for all chunk scanners, water bodies, & shorelines, to be reset without missing any chunks.<br><br>
- * The idea behind this was that ChunkPos's are added to the scanners map upon a chunk being loaded. The keys(ChunkPos longs) in the scanners map are used during the {@link WaterBodyHandler#rebuild()} method to setup ChunkScanners for all the chunks. If it was removed, getting all loaded chunks is surprisingly difficult, as there is no accessible method. I decided instead of using mixins/access wideners to get it, I would do this instead.<br><br>
- * Scanning a specific radius of nearby chunks could cause some already loaded chunks(which would have been removed from the scanners map) to be missed, as they would not call the load chunk event. Even though they would be far away initially, moving toward them would be very noticeable. Note: client render distance doesn't always equal server render distance, and it isn't possible to get the server render distance on the client without an AW.<br><br>
- * A ChunkPos(as a long) is removed from the scanners when that chunk is unloaded. Each WaterBody/Shoreline has their own method which removes the blocks associated with that ChunkPos.<br><br>
- * ChunkPos' are updated and rescanned after a configurable amount of block updates within that chunk.
+ * How this goofy thing works:<br><br>
+ *
+ * Chunk loaded -> {@link WaterHandler#addChunk(Chunk)} -> schedules a {@link ChunkScanner} to the {@link WaterHandler#scanners} Map.<br><br>
+ *
+ * A {@link ChunkScanner} iterates through a chunk's blocks(sampling heightmap), checking if each block is water or not.<br>
+ * <b>- If water -></b> The BlockPos is added to {@link WaterHandler#waitingWaterBlocks} Queue(split per chunk).<br>
+ * That water block's neighbours are also checked for water.<br>
+ * <i>--- If neighbour is water -></i> Also added to the waitingWaterBlocks Queue<br>
+ * <i>--- If neighbour is not water -></i> Added to the {@link WaterHandler#shoreBlocks} Map(split per chunk).<br>For every 8 shoreline blocks, {@link WaterHandler#createSitePos(BlockPos)} is called, creating a {@link SitePos} with the initial scanned BlockPos and is added to the {@link WaterHandler#sites} Map(split per chunk).<br><br>
+ *
+ * A ChunkScanner is associated with each loaded chunk, but will not tick unless within the config radius. {@link WaterHandler#tickScheduledScanners(ClientPlayerEntity)} ticks all scheduled ChunkScanners(within range) 10 times, scanning 10 blocks per chunk.<br><br>
+ *
+ * Once a ChunkScanner is done, <b>IT'S SCANNER VALUE IS SET TO NULL</b> in the scanners Map!!! Meaning the ChunkPos(long) key still exists, but its value will be null.<br>
+ * This was done to allow for all loaded chunks to remain accessible for the {@link WaterHandler#rebuild()} method, along with a few other things.<br><br>
+ *
+ * For any given chunk, once all nearby ChunkScanners in a 3 chunk radius are finished scanning, {@link WaterHandler#tickWaitingWaterBlocks(boolean)} ticks 10 water blocks per chunk.<br>
+ * A "waiting water block" is any water block which has not had a SitePos calculated as the closest yet.<br><br>
+ *
+ * Ticking a waiting water block finds the closest SitePos via {@link WaterHandler#findClosestSite(BlockPos)}, and removes it from the waitingWaterBlocks Queue and placing it in the {@link WaterHandler#siteCache} Map(key being the BlockPos, value being the SitePos).<br><br>
+ *
+ * Chunk unloaded -> {@link WaterHandler#removeChunk(Chunk)}. Because nearly everything is split per chunk via Maps, all keys with that ChunkPos(as a long) are removed, removing the values with it.<br><br>
+ *
+ * Join world -> Loads many chunks(calling the chunk load event) -> {@link WaterHandler#build()} is called, which ticks everything until all is finished. This does not use the tickScheduledScanners method, but does use the tickWaitingWaterBlocks method. Called after enough nearby chunks are loaded via {@link TidalWaveHandler#nearbyChunksLoaded(ClientPlayerEntity)}.<br><br>
+ *
+ * Block updated -> {@link WaterHandler#onBlockUpdate(BlockPos, BlockState)}. A count of all block updates per chunk is kept track of in {@link WaterHandler#chunkUpdates}.<br>After enough block updates in a chunk(configurable), that chunk will be rescanned via {@link WaterHandler#rescheduleChunkScanner(ChunkPos)}.
  *
  * @see TidalWaveHandler
  * @see ChunkScanner
+ * @see SitePos
  */
-public class WaterBodyHandler {
+public class WaterHandler {
     public final TidalWaveHandler tidalWaveHandler;
     public final ClientWorld world;
     //using fastutils because... it has fast in its name? I've been told its fast! And I gotta go fast!
@@ -75,9 +92,6 @@ public class WaterBodyHandler {
     //boolean for if the initial joining/chunk reloading build is finished or not
     public boolean built = false;
 
-    //boolean for if any scanner is currently ticking - used for knowing when to wait to queue through any waiting water blocks
-    public boolean anyScannerActive = true;
-
     //boolean for if the centers of ALL sites should be recalculated - it's a very fast calculation, so I feel comfortable doing it all at once
     public boolean recalcSiteCenters = true;
 
@@ -99,7 +113,7 @@ public class WaterBodyHandler {
 
     //FIXME - init build doesn't get all nearby chunks(reload build scans more chunks than join build)
 
-    public WaterBodyHandler(ClientWorld world, TidalWaveHandler tidalWaveHandler) {
+    public WaterHandler(ClientWorld world, TidalWaveHandler tidalWaveHandler) {
         this.world = world;
         this.tidalWaveHandler = tidalWaveHandler;
     }
@@ -127,7 +141,7 @@ public class WaterBodyHandler {
     }
 
     /**
-     * Calculates the closest SitePos from a BlockPos. Used by {@link WaterBodyHandler#getSiteForPos(BlockPos)}.
+     * Calculates the closest SitePos from a BlockPos. Used by {@link WaterHandler#getSiteForPos(BlockPos)}.
      *
      * @param pos The BlockPos to use for finding the closest SitePos
      * @return The closest SitePos, or null if no SitePos' are currently stored.
@@ -302,13 +316,11 @@ public class WaterBodyHandler {
     public void tickScheduledScanners(ClientPlayerEntity player) {
         BlockPos playerPos = player.getBlockPos();
         int chunkRadius = this.tidalWaveHandler.getChunkRadius(); //caching this call might help?
-        anyScannerActive = false;
         for (Map.Entry<Long, ChunkScanner> entry : this.scanners.sequencedEntrySet()) {
             if (entry.getValue() == null) continue;
 
             long chunkPosL = entry.getKey();
             if (!scannerInDistance(playerPos, chunkPosL, chunkRadius)) continue;
-            anyScannerActive = true;
 
             ChunkScanner scanner = entry.getValue();
             for (int i = 0; i < 10; i++) {
@@ -316,7 +328,6 @@ public class WaterBodyHandler {
             }
 
             if (scanner.isFinished()) {
-                anyScannerActive = false; //gets set back to true during the loop here, if it is the last one then oh well
                 scanners.put(chunkPosL, null);
                 MinecraftClient.getInstance().player.playSound(SoundEvents.ITEM_TRIDENT_HIT_GROUND, 0.25f, 1f);
             }
@@ -397,7 +408,7 @@ public class WaterBodyHandler {
      * Schedules a chunk to be scanned water blocks, shoreblocks, sites, etc. Called when a new chunk is loaded.
      *
      * @param chunk Chunk to schedule
-     * @see WaterBodyHandler#scheduleChunkScanner(ChunkPos)
+     * @see WaterHandler#scheduleChunkScanner(ChunkPos)
      */
     public void addChunk(Chunk chunk) {
         scheduleChunkScanner(chunk.getPos());
@@ -407,12 +418,11 @@ public class WaterBodyHandler {
      * Schedules a chunk to be scanned for water blocks, shoreblocks, sites, etc.
      *
      * @param chunkPos ChunkPos of the chunk to be scanned
-     * @see WaterBodyHandler#addChunk(Chunk)
+     * @see WaterHandler#addChunk(Chunk)
      */
     public void scheduleChunkScanner(ChunkPos chunkPos) {
         long pos = chunkPos.toLong();
         this.scanners.computeIfAbsent(pos, pos1 -> new ChunkScanner(this, this.world, chunkPos));
-        this.anyScannerActive = true;
     }
 
     /**

@@ -29,12 +29,12 @@ public class TidalClient implements ClientModInitializer {
 
         ClientChunkEvents.CHUNK_LOAD.register((world, chunk) -> {
             TidalWorld tidalWorld = (TidalWorld) world;
-            tidalWorld.tidal$tidalWaveHandler().waterBodyHandler.addChunk(chunk);
+            tidalWorld.tidal$tidalWaveHandler().waterHandler.addChunk(chunk);
         });
 
         ClientChunkEvents.CHUNK_UNLOAD.register((world, chunk) -> {
             TidalWorld tidalWorld = (TidalWorld) world;
-            tidalWorld.tidal$tidalWaveHandler().waterBodyHandler.removeChunk(chunk);
+            tidalWorld.tidal$tidalWaveHandler().waterHandler.removeChunk(chunk);
         });
 
         //Called when an individual block is updated(placed, broken, state changed, etc.)
@@ -42,7 +42,7 @@ public class TidalClient implements ClientModInitializer {
             MinecraftClient client = MinecraftClient.getInstance();
             if(client.world == null || client.player == null) return;
             TidalWorld tidalWorld = (TidalWorld) client.world;
-            tidalWorld.tidal$tidalWaveHandler().waterBodyHandler.onBlockUpdate(pos, state);
+            tidalWorld.tidal$tidalWaveHandler().waterHandler.onBlockUpdate(pos, state);
         });
 
         //Called when the chunks are reloaded(f3+a, resource pack change, etc.)
@@ -52,7 +52,7 @@ public class TidalClient implements ClientModInitializer {
             if(client.world == null || client.player == null) return;
             TidalWorld tidalWorld = (TidalWorld) client.world;
             tidalWorld.tidal$tidalWaveHandler().reloadNearbyChunks();
-            tidalWorld.tidal$tidalWaveHandler().waterBodyHandler.rebuild();
+            tidalWorld.tidal$tidalWaveHandler().waterHandler.rebuild();
         });
 
         WorldRenderEvents.BEFORE_DEBUG_RENDER.register(context -> {

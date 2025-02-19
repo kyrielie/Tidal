@@ -18,7 +18,7 @@ import net.superkat.tidal.config.TidalConfig;
 import net.superkat.tidal.particles.debug.DebugWaveMovementParticle;
 import net.superkat.tidal.water.DebugHelper;
 import net.superkat.tidal.water.SitePos;
-import net.superkat.tidal.water.WaterBodyHandler;
+import net.superkat.tidal.water.WaterHandler;
 
 import java.awt.*;
 import java.util.List;
@@ -26,22 +26,35 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Used for handling when tidal waves should spawn, as well as ticking the {@link WaterBodyHandler}
+ * The main handler, used for spawning/handling tidal waves, as well as ticking the world's {@link WaterHandler}
  */
 public class TidalWaveHandler {
     public final ClientWorld world;
-    public WaterBodyHandler waterBodyHandler;
+    public WaterHandler waterHandler;
 
     public boolean nearbyChunksLoaded = false;
     public int waveTicks = 0;
 
     public TidalWaveHandler(ClientWorld world) {
         this.world = world;
-        this.waterBodyHandler = new WaterBodyHandler(world, this);
+        this.waterHandler = new WaterHandler(world, this);
     }
 
     public void reloadNearbyChunks() {
         this.nearbyChunksLoaded = false;
+    }
+
+    public void tick() {
+        MinecraftClient client = MinecraftClient.getInstance();
+        ClientPlayerEntity player = client.player;
+        assert player != null;
+
+        if(!this.nearbyChunksLoaded) {
+            this.nearbyChunksLoaded = nearbyChunksLoaded(player);
+        }
+
+        waterHandler.tick();
+        debugTick(client, player);
     }
 
     //This isn't perfect, but its close enough I suppose
@@ -66,10 +79,12 @@ public class TidalWaveHandler {
                 world.getChunk(chunkX + (chunkRadiusReduced), chunkZ - (chunkRadiusReduced))
         );
         return checkChunks.stream().noneMatch(WorldChunk::isEmpty);
+        //alternative way - takes slightly longer
 //        return MinecraftClient.getInstance().worldRenderer.isTerrainRenderComplete();
     }
 
     //Gets all loaded nearby chunks - created using ClientChunkManager & ClientChunkManager.ClientChunkMap
+    //Unused right now, but could be helpful for making the WaterBodyHandler's scanners empty out when a scanner is done
     public Set<ChunkPos> getNearbyChunkPos() {
         MinecraftClient client = MinecraftClient.getInstance();
         ClientPlayerEntity player = client.player;
@@ -91,6 +106,9 @@ public class TidalWaveHandler {
         return loadedChunks;
     }
 
+    /**
+     * @return The tidal wave chunk radius - pulls from either the Tidal config or the server's render distance(whichever one is smaller).
+     */
     public int getChunkRadius() {
         MinecraftClient client = MinecraftClient.getInstance();
         int configRadius = TidalConfig.chunkRadius;
@@ -99,31 +117,19 @@ public class TidalWaveHandler {
         return Math.min(configRadius, serverRadius);
     }
 
+    /**
+     * @return The loaded chunk radius - used for figuring out all loaded chunks on the client.
+     */
     public int getLoadedChunkRadius() {
         MinecraftClient client = MinecraftClient.getInstance();
         int loadRadius = client.options.serverViewDistance;
         return Math.max(2, loadRadius) + 3;
     }
 
-    public void tick() {
-        MinecraftClient client = MinecraftClient.getInstance();
-        ClientPlayerEntity player = client.player;
-        assert player != null;
-
-        getNearbyChunkPos();
-
-        if(!this.nearbyChunksLoaded) {
-            this.nearbyChunksLoaded = nearbyChunksLoaded(player);
-        }
-
-        waterBodyHandler.tick();
-        debugTick(client, player);
-    }
-
     public void debugTick(MinecraftClient client, ClientPlayerEntity player) {
-
+        //show water direction of water blocks
         if(DebugHelper.holdingCompass() || DebugHelper.offhandCompass()) {
-            if(!this.waterBodyHandler.built) return;
+            if(!this.waterHandler.built) return;
 
             ChunkPos playerChunk = player.getChunkPos();
             if(DebugHelper.offhandCompass()) {
@@ -140,6 +146,7 @@ public class TidalWaveHandler {
 
         }
 
+        //print water direction's yaw
         if(DebugHelper.usingSpyglass()) {
             waveTicks++;
 
@@ -147,10 +154,10 @@ public class TidalWaveHandler {
 
             BlockPos playerPos = player.getBlockPos();
 
-            List<BlockPos> scannedBlocks = this.waterBodyHandler.siteCache.values().stream().flatMap(map -> map.keySet().stream()).toList();
+            List<BlockPos> scannedBlocks = this.waterHandler.siteCache.values().stream().flatMap(map -> map.keySet().stream()).toList();
             if(scannedBlocks.contains(playerPos)) {
                 long chunkPosL = new ChunkPos(playerPos).toLong();
-                SitePos site = this.waterBodyHandler.siteCache.get(chunkPosL).get(playerPos);
+                SitePos site = this.waterHandler.siteCache.get(chunkPosL).get(playerPos);
                 System.out.println(site.getYawAsF3Angle());
             }
         }
@@ -160,7 +167,7 @@ public class TidalWaveHandler {
         Color color = Color.WHITE; //activates the movement particle's custom colors
 //        Color color = Color.LIGHT_GRAY; //deactivates the movement particle's custom colors
 
-        Object2ObjectOpenHashMap<BlockPos, SitePos> map = this.waterBodyHandler.siteCache.get(chunkPosL);
+        Object2ObjectOpenHashMap<BlockPos, SitePos> map = this.waterHandler.siteCache.get(chunkPosL);
         if(map == null) return;
 
         for (Map.Entry<BlockPos, SitePos> entry : map.entrySet()) {

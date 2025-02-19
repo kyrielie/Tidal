@@ -16,28 +16,30 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Scans a chunk to create a list of created water bodies and shorelines
- * @see WaterBodyHandler
+ * Scans a chunk for water blocks and shoreline blocks.
+ * @see WaterHandler
  */
 public class ChunkScanner {
+    public final WaterHandler handler;
+    public final ClientWorld world;
+
     //blocks which have been checked to be water or not water
     public Map<BlockPos, Boolean> cachedBlocks = new Object2ObjectOpenHashMap<>();
 
     //blocks which have had their neighbours checked(scanned) as water or not water, and added to water body/shoreline
     public Set<BlockPos> visitedBlocks = new ObjectOpenHashSet<>();
 
+    //cached iterator idk
     public Iterator<BlockPos> cachedIterator = null;
 
     //amount of shoreline blocks since the last created SitePos
     public int shorelinesSinceSite = 0;
 
-    public final WaterBodyHandler handler;
-    public final ClientWorld world;
     public ChunkPos chunkPos;
     public boolean finished = false;
 
-    //TODO - scan above and below for water to jumps in the water
-    public ChunkScanner(WaterBodyHandler handler, ClientWorld world, ChunkPos chunkPos) {
+    //TODO(unimportant for now) - scan above and below for water to jumps in the water
+    public ChunkScanner(WaterHandler handler, ClientWorld world, ChunkPos chunkPos) {
         this.handler = handler;
         this.world = world;
         this.chunkPos = chunkPos;

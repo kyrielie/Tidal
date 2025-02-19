@@ -3,6 +3,10 @@ package net.superkat.tidal.water;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import net.minecraft.util.math.BlockPos;
 
+/**
+ * Holds a BlockPos as the main position, along with a list of all x/z coordinates of BlockPos' which were calculated to have this SitePos as the closest.<br>
+ * The yaw is the direction from the center of all those blocks towards the SitePos' main position.
+ */
 public class SitePos {
     public BlockPos pos;
     public int centerX = 0;
