@@ -173,7 +173,7 @@ public class TidalWaveHandler {
         for (Map.Entry<BlockPos, SitePos> entry : map.entrySet()) {
             BlockPos pos = entry.getKey();
             SitePos sitePos = entry.getValue();
-            if(!sitePos.yawCalculated) continue;
+            if(sitePos == null || !sitePos.yawCalculated) continue;
             DebugWaveMovementParticle.DebugWaveMovementParticleEffect particleEffect = new DebugWaveMovementParticle.DebugWaveMovementParticleEffect(
                     Vec3d.unpackRgb(color.getRGB()).toVector3f(),
                     1f,
