@@ -48,7 +48,7 @@ import java.util.stream.Collectors;
  * A ChunkScanner is associated with each loaded chunk, but will not tick unless within the config radius. {@link WaterHandler#tickScheduledScanners(ClientPlayerEntity)} ticks all scheduled ChunkScanners(within range) 10 times, scanning 10 blocks per chunk.<br><br>
  *
  * Once a ChunkScanner is done, <b>IT'S SCANNER VALUE IS SET TO NULL</b> in the scanners Map!!! Meaning the ChunkPos(long) key still exists, but its value will be null.<br>
- * This was done to allow for all loaded chunks to remain accessible for the {@link WaterHandler#rebuild()} method, along with a few other things.<br><br>
+ * This was done to allow for all loaded chunks to remain accessible for the {@link WaterHandler#rebuild()} method, and to make it easy to start scanning a loaded chunk when it becomes in range.<br><br>
  *
  * For any given chunk, once all nearby ChunkScanners in a 3 chunk radius are finished scanning, {@link WaterHandler#tickWaitingWaterBlocks(boolean)} ticks 10 water blocks per chunk.<br>
  * A "waiting water block" is any water block which has not had a SitePos calculated as the closest yet.<br><br>
@@ -97,6 +97,8 @@ public class WaterHandler {
 
     //idea: if no site is within configurable distance, that water is considered open ocean and extra effects can be added there
     //idea 2: if the amount of blocks associated with a SitePos is really small, non-directional ambient particles spawn
+
+    //TODO - synced chunk finding (choose a number -1 through 1, twice, then relative to a center chunk for every 3x3 chunks find that I guess idk)
 
     //TODO - possibly change build to use the tick scanners method instead of doing it all itself?
     //TODO - make it so that the scanners map clears finished chunks to free up memory (surprisingly difficult to do)
