@@ -12,6 +12,16 @@ import java.awt.*;
 
 /**
  * General utils class for helping show data. For example, colors for a list to use with the debug particles.
+ * <br><br>
+ * Current debug stuff:
+ * <ul>
+ * <li>Spyglass in hotbar for all scanned water blocks, color coded per closest SitePos</li>
+ * <li>Compass to see wave direction of all blocks in your chunk</li>
+ * <li>Compass in offhand to see wave direction of all blocks within nearby chunks</li>
+ * <li>Spyglass in hotbar to see debug wave particles in your chunk</li>
+ * <li>Clock in hotbar to see debug wave particles in nearby chunks</li>
+ * <li>Use spyglass in scanned water block to print direction in console</li>
+ * </ul>
  */
 public class DebugHelper {
 
