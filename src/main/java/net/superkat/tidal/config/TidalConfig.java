@@ -8,4 +8,7 @@ public class TidalConfig {
     public static int chunkRadius = 8; //will be defaulted to 5 later
     public static int chunkUpdatesRescanAmount = 50;
 
+    public static int waveTicks = 20; //dummy value
+    public static int waveDistFromShore = 5;
+
 }

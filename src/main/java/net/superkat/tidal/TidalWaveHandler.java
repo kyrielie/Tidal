@@ -10,7 +10,6 @@ import net.minecraft.fluid.FluidState;
 import net.minecraft.registry.tag.FluidTags;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
-import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.math.random.Random;
 import net.minecraft.world.chunk.WorldChunk;
@@ -33,7 +32,6 @@ public class TidalWaveHandler {
     public WaterHandler waterHandler;
 
     public boolean nearbyChunksLoaded = false;
-    public int waveTicks = 0;
 
     public TidalWaveHandler(ClientWorld world) {
         this.world = world;
@@ -44,6 +42,9 @@ public class TidalWaveHandler {
         this.nearbyChunksLoaded = false;
     }
 
+    /**
+     * General tick method for all tick-related things EXCEPT the actual waves.
+     */
     public void tick() {
         MinecraftClient client = MinecraftClient.getInstance();
         ClientPlayerEntity player = client.player;
@@ -53,8 +54,64 @@ public class TidalWaveHandler {
             this.nearbyChunksLoaded = nearbyChunksLoaded(player);
         }
 
-        waterHandler.tick();
+        this.waterHandler.tick();
+        tidalTick();
         debugTick(client, player);
+    }
+
+    /**
+     * Tick method for waves
+     */
+    public void tidalTick() {
+        //cursed but should sync up
+        //TODO - either find consistent way of finding chunks within config distance that would sync up with
+        // other people with the same config distance without destroying performance, or throw out synced waves entirely
+        if(this.world.getTime() % TidalConfig.waveTicks == 0) {
+            spawnWave();
+        }
+
+    }
+
+    public void spawnWave() {
+        int distFromShore = TidalConfig.waveDistFromShore;
+        ChunkPos spawnChunkPos = this.getSyncedRandomChunk();
+
+        if(DebugHelper.clockInHotbar()) {
+            ChunkPos playerChunk = MinecraftClient.getInstance().player.getChunkPos();
+            int radius = 3;
+            ChunkPos start = new ChunkPos(playerChunk.x + radius, playerChunk.z + radius);
+            ChunkPos end = new ChunkPos(playerChunk.x - radius, playerChunk.z - radius);
+            for (ChunkPos chunkPos : ChunkPos.stream(start, end).toList()) {
+                Set<BlockPos> waterBlocks = this.waterHandler.getWaterCacheAtDistance(chunkPos, distFromShore);
+                if(waterBlocks == null) continue;
+                debugWaveParticles(waterBlocks);
+            }
+            return;
+        }
+
+        if(DebugHelper.spyglassInHotbar()) spawnChunkPos = MinecraftClient.getInstance().player.getChunkPos();
+        Set<BlockPos> waterBlocks = this.waterHandler.getWaterCacheAtDistance(spawnChunkPos, distFromShore);
+        if(waterBlocks == null) return; //TODO choose random chunk within radius if null
+
+        debugWaveParticles(waterBlocks);
+    }
+
+    public void debugWaveParticles(Set<BlockPos> waterBlocks) {
+        Color color = Color.WHITE; //activates the movement particle's custom colors
+//        Color color = Color.LIGHT_GRAY; //deactivates the movement particle's custom colors
+        boolean farParticles = false;
+
+        for (BlockPos water : waterBlocks) {
+            SitePos site = this.waterHandler.getSiteForPos(water);
+            if(site == null || !site.yawCalculated) continue;
+            DebugWaveMovementParticle.DebugWaveMovementParticleEffect particleEffect = new DebugWaveMovementParticle.DebugWaveMovementParticleEffect(
+                    Vec3d.unpackRgb(color.getRGB()).toVector3f(),
+                    1f,
+                    site.getYaw(),
+                    0.3f,
+                    20);
+            this.world.addParticle(particleEffect, farParticles, water.getX(), water.getY() + 2, water.getZ(), 0, 0,0);
+        }
     }
 
     //This isn't perfect, but its close enough I suppose
@@ -126,6 +183,24 @@ public class TidalWaveHandler {
         return Math.max(2, loadRadius) + 3;
     }
 
+    public ChunkPos getSyncedRandomChunk() {
+        MinecraftClient client = MinecraftClient.getInstance();
+        ClientPlayerEntity player = client.player;
+        Random syncedRandom = getSyncedRandom();
+
+        ChunkPos playerPos = player.getChunkPos();
+        int playerX = playerPos.x;
+        int playerZ = playerPos.z;
+        int xExtra = syncedRandom.nextBetween(0, 2);
+        int zExtra = syncedRandom.nextBetween(0, 2);
+
+        //rounds to closest 3
+        int x = playerX - (playerX % 3);
+        int z = playerZ - (playerZ % 3);
+
+        return new ChunkPos(x + xExtra, z + zExtra);
+    }
+
     public void debugTick(MinecraftClient client, ClientPlayerEntity player) {
         //show water direction of water blocks
         if(DebugHelper.holdingCompass() || DebugHelper.offhandCompass()) {
@@ -148,16 +223,14 @@ public class TidalWaveHandler {
 
         //print water direction's yaw
         if(DebugHelper.usingSpyglass()) {
-            waveTicks++;
-
             if(client.world.getTime() % 20 != 0) return;
 
             BlockPos playerPos = player.getBlockPos();
 
-            List<BlockPos> scannedBlocks = this.waterHandler.siteCache.values().stream().flatMap(map -> map.keySet().stream()).toList();
+            List<BlockPos> scannedBlocks = this.waterHandler.waterCache.values().stream().flatMap(map -> map.keySet().stream()).toList();
             if(scannedBlocks.contains(playerPos)) {
                 long chunkPosL = new ChunkPos(playerPos).toLong();
-                SitePos site = this.waterHandler.siteCache.get(chunkPosL).get(playerPos);
+                SitePos site = this.waterHandler.waterCache.get(chunkPosL).get(playerPos);
                 System.out.println(site.getYawAsF3Angle());
             }
         }
@@ -167,7 +240,7 @@ public class TidalWaveHandler {
         Color color = Color.WHITE; //activates the movement particle's custom colors
 //        Color color = Color.LIGHT_GRAY; //deactivates the movement particle's custom colors
 
-        Object2ObjectOpenHashMap<BlockPos, SitePos> map = this.waterHandler.siteCache.get(chunkPosL);
+        Object2ObjectOpenHashMap<BlockPos, SitePos> map = this.waterHandler.waterCache.get(chunkPosL);
         if(map == null) return;
 
         for (Map.Entry<BlockPos, SitePos> entry : map.entrySet()) {
@@ -198,15 +271,6 @@ public class TidalWaveHandler {
         long time = MinecraftClient.getInstance().world.getTime();
         long random = 5L * Math.round(time / 5f); //math.ceil instead?
         return Random.create(random);
-    }
-
-    public static BlockPos topOfWater(ClientWorld world, BlockPos pos) {
-        BlockPos.Mutable mutable = pos.mutableCopy().move(Direction.UP);
-
-        while(posIsWater(world, mutable)) {
-            mutable.move(Direction.UP);
-        }
-        return mutable.move(Direction.DOWN);
     }
 
     /**

@@ -36,6 +36,14 @@ public class DebugHelper {
         return PlayerInventory.isValidHotbarIndex(playerInventory.getSlotWithStack(Items.SPYGLASS.getDefaultStack()));
     }
 
+    //stop making fun of my choices of debug items - it's because i watch bdubs
+    public static boolean clockInHotbar() {
+        MinecraftClient client = MinecraftClient.getInstance();
+        ClientPlayerEntity player = client.player;
+        PlayerInventory playerInventory = player.getInventory();
+        return PlayerInventory.isValidHotbarIndex(playerInventory.getSlotWithStack(Items.CLOCK.getDefaultStack()));
+    }
+
     public static boolean usingShield() {
         MinecraftClient client = MinecraftClient.getInstance();
         ClientPlayerEntity player = client.player;

@@ -1,5 +1,6 @@
 package net.superkat.tidal.water;
 
+import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
@@ -53,7 +54,7 @@ import java.util.stream.Collectors;
  * For any given chunk, once all nearby ChunkScanners in a 3 chunk radius are finished scanning, {@link WaterHandler#tickWaitingWaterBlocks(boolean)} ticks 10 water blocks per chunk.<br>
  * A "waiting water block" is any water block which has not had a SitePos calculated as the closest yet.<br><br>
  *
- * Ticking a waiting water block finds the closest SitePos via {@link WaterHandler#findClosestSite(BlockPos)}, and removes it from the waitingWaterBlocks Queue and placing it in the {@link WaterHandler#siteCache} Map(key being the BlockPos, value being the SitePos).<br><br>
+ * Ticking a waiting water block finds the closest SitePos via {@link WaterHandler#findClosestSite(long, BlockPos)}, and removes it from the waitingWaterBlocks Queue and placing it in the {@link WaterHandler#waterCache} Map(key being the BlockPos, value being the SitePos).<br><br>
  *
  * Chunk unloaded -> {@link WaterHandler#removeChunk(Chunk)}. Because nearly everything is split per chunk via Maps, all keys with that ChunkPos(as a long) are removed, removing the values with it.<br><br>
  *
@@ -87,7 +88,23 @@ public class WaterHandler {
     public ObjectOpenHashSet<SitePos> cachedSiteSet = new ObjectOpenHashSet<>();
 
     //Keep track of which SitePos is closest to all scanned water blocks
-    public Long2ObjectOpenHashMap<Object2ObjectOpenHashMap<BlockPos, SitePos>> siteCache = new Long2ObjectOpenHashMap<>();
+    public Long2ObjectOpenHashMap<Object2ObjectOpenHashMap<BlockPos, SitePos>> waterCache = new Long2ObjectOpenHashMap<>();
+
+    //This is being kept as its own map only for now. I considered a few other options, but didn't know which one was better:
+    // - it's own map(already done)
+    // - Changing the waterCache's Object2ObjectMap to have a ObjectIntPair<SitePos> for the BlockPos value, instead of the current SitePos
+    // - Changing the waterCache's Object2ObjectMap to a Table<SitePos, Integer, Set<BlockPos>> instead
+
+    //That third option would be the easiest to work with after everything was cached,
+    //but I was afraid that the process of checking if a Set<BlockPos> had already been created for a Table,
+    //and then checking if that set contained the BlockPos given to WaterHandler#findClosestSite would be too expensive
+
+    //The second option I was afraid would be too expensive when trying to find all water blocks within a specific distance,
+    //as you'd need to filter through all of them each time you wanted to find a block within a specific distance
+
+    //this is the equal to Map<ChunkPos, Map<Integer, Set<BlockPos>>>, which may not be great performance-wise?
+    //alternatively, use Long2ObjectOpenHashMap<HashMultimap<Integer, BlockPos>>????
+    public Long2ObjectOpenHashMap<Int2ObjectOpenHashMap<ObjectOpenHashSet<BlockPos>>> waterDistCache = new Long2ObjectOpenHashMap<>();
 
     //All scanned shoreline blocks
     public Long2ObjectOpenHashMap<Set<BlockPos>> shoreBlocks = new Long2ObjectOpenHashMap<>(81, 0.25f);
@@ -101,10 +118,10 @@ public class WaterHandler {
     //idea: if no site is within configurable distance, that water is considered open ocean and extra effects can be added there
     //idea 2: if the amount of blocks associated with a SitePos is really small, non-directional ambient particles spawn
 
-    //TODO - synced chunk finding (choose a number -1 through 1, twice, then relative to a center chunk for every 3x3 chunks find that I guess idk)
-
+    //TODO - update waterDistCache to be better?
     //TODO - possibly change build to use the tick scanners method instead of doing it all itself?
     //TODO - make it so that the scanners map clears finished chunks to free up memory (surprisingly difficult to do)
+    //FIXME - loading new chunks quickly doesn't always work as fast as expected(in the same chunk) - a priority queue for closer chunks?
     //FIXME - init build doesn't get all nearby chunks(reload build scans more chunks than join build)
 
     public WaterHandler(ClientWorld world, TidalWaveHandler tidalWaveHandler) {
@@ -135,13 +152,45 @@ public class WaterHandler {
     }
 
     /**
+     * Gets a Set of BlockPos' that are a specified distance away from their closest SitePos within a ChunkPos. Used for spawning waves.
+     *
+     * @param chunkPos The ChunkPos to get the water blocks from
+     * @param distance The distance to check for
+     * @return The Set of BlockPos, or null if none are found.
+     */
+    @Nullable
+    public Set<BlockPos> getWaterCacheAtDistance(ChunkPos chunkPos, int distance) {
+        long chunkPosL = chunkPos.toLong();
+        if(this.waterDistCache.containsKey(chunkPosL)) return this.waterDistCache.get(chunkPosL).get(distance);
+        return null;
+    }
+
+    /**
+     * Cache and or return the closest SitePos of a BlockPos(assumed to be, but technically doesn't have to be, a water block).
+     *
+     * @param pos BlockPos to use for finding the closest SitePos.
+     * @return The BlockPos' closest SitePos, or {@link BlockPos#ORIGIN} if the site is null.
+     */
+    public SitePos getSiteForPos(BlockPos pos) {
+        long chunkPosL = new ChunkPos(pos).toLong();
+        return this.waterCache
+                .computeIfAbsent(chunkPosL,
+                        chunkPosL2 -> new Object2ObjectOpenHashMap<>()
+                ).computeIfAbsent(pos, pos1 -> {
+                    SitePos closest = findClosestSite(chunkPosL, pos);
+                    if(closest != null) closest.addPos(pos);
+                    return closest;
+                });
+    }
+
+    /**
      * Calculates the closest SitePos from a BlockPos. Used by {@link WaterHandler#getSiteForPos(BlockPos)}.
      *
      * @param pos The BlockPos to use for finding the closest SitePos
      * @return The closest SitePos, or null if no SitePos' are currently stored.
      */
     @Nullable //FIXME - optimize this(Hama said it should be easy)
-    public SitePos findClosestSite(BlockPos pos) {
+    public SitePos findClosestSite(long chunkPosL, BlockPos pos) {
         if(this.sites.isEmpty()) return null;
 
         if(this.cachedSiteSet == null || this.cachedSiteSet.isEmpty()) {
@@ -153,34 +202,24 @@ public class WaterHandler {
         for (SitePos site : this.cachedSiteSet) {
             double dx = pos.getX() + 0.5 - site.getX();
             double dz = pos.getZ() + 0.5 - site.getZ();
-            double dist = dx * dx + dz * dz;
+            double checkDist = dx * dx + dz * dz;
 
-            if(closest == null || dist < distance) {
+            if(closest == null || checkDist < distance) {
                 closest = site;
-                distance = dist;
+                distance = checkDist;
             }
         }
-        return closest;
-    }
 
-    /**
-     * Cache and or return the closest SitePos of a BlockPos(assumed to be, but technically doesn't have to be, a water block).
-     *
-     * @param pos BlockPos to use for finding the closest SitePos.
-     * @return The BlockPos' closest SitePos, or {@link BlockPos#ORIGIN} if the site is null.
-     */
-    public BlockPos getSiteForPos(BlockPos pos) {
-        long chunkPosL = new ChunkPos(pos).toLong();
-        SitePos site = this.siteCache
-                .computeIfAbsent(chunkPosL,
-                        chunkPosL2 -> new Object2ObjectOpenHashMap<>()
-                ).computeIfAbsent(pos, pos1 -> {
-                    SitePos closest = findClosestSite(pos);
-                    if(closest != null) closest.addPos(pos);
-                    return closest;
-                });
-        if(site == null) return BlockPos.ORIGIN;
-        return site.getPos();
+        if(closest != null) {
+            int intDistance = (int) Math.sqrt(distance);
+            this.waterDistCache.computeIfAbsent(
+                    chunkPosL, chunkPosL2 -> new Int2ObjectOpenHashMap<>()
+            ).computeIfAbsent(
+                    intDistance, dist -> new ObjectOpenHashSet<>()
+            ).add(pos);
+        }
+
+        return closest;
     }
 
     private void debugTick(MinecraftClient client, ClientPlayerEntity player) {
@@ -206,7 +245,7 @@ public class WaterHandler {
 
         //display all water blocks pos', colored by closest site
         int totalSites = allSites.size();
-        for (Object2ObjectOpenHashMap<BlockPos, SitePos> posSiteMap : this.siteCache.values()) {
+        for (Object2ObjectOpenHashMap<BlockPos, SitePos> posSiteMap : this.waterCache.values()) {
             for (Map.Entry<BlockPos, SitePos> entry : posSiteMap.entrySet()) {
                 BlockPos blockPos = entry.getKey();
                 if(!blockPos.isWithinDistance(player.getPos(), 100)) continue;
@@ -251,8 +290,6 @@ public class WaterHandler {
         long scannerTime = Util.getMeasuringTimeMs();
         int chunksScanned = 0;
 
-        //I believe doing it this way is faster than an iterator
-//        LongArrayList finishedScanners = new LongArrayList();
         for (ChunkScanner scanner : this.scanners.values()) {
             if (scanner == null) continue;
 //            long scannerStartTime = Util.getMeasuringTimeMs();
@@ -268,7 +305,6 @@ public class WaterHandler {
                 }
             }
         }
-//        finishedScanners.forEach(scannerPosL -> this.scanners.remove(scannerPosL));
 
         Tidal.LOGGER.info("Total scan time: {} ms", Util.getMeasuringTimeMs() - scannerTime);
         Tidal.LOGGER.info("Chunks scanned: {}", chunksScanned);
@@ -296,11 +332,6 @@ public class WaterHandler {
     public void rebuild() {
         this.clear(); //clear all data(ticking scanners -> null, sites/shoreblocks/waterblocks all cleared)
 
-//        for (ChunkPos chunkPos : this.tidalWaveHandler.getNearbyChunkPos()) {
-//            long chunkPosL = chunkPos.toLong();
-//            this.scanners.put(chunkPosL, new ChunkScanner(this, this.world, chunkPos));
-//        }
-
         for (Map.Entry<Long, ChunkScanner> entry : this.scanners.long2ObjectEntrySet()) {
             ChunkPos chunkPos = new ChunkPos(entry.getKey());
             long pos = chunkPos.toLong();
@@ -318,9 +349,7 @@ public class WaterHandler {
     public void tickScheduledScanners(ClientPlayerEntity player) {
         BlockPos playerPos = player.getBlockPos();
         int chunkRadius = this.tidalWaveHandler.getChunkRadius(); //caching this call might help?
-//        Iterator<Map.Entry<Long, ChunkScanner>> iterator = this.scanners.sequencedEntrySet().iterator();
 
-//        LongArrayList finishedScanners = new LongArrayList();
         for (Map.Entry<Long, ChunkScanner> entry : this.scanners.long2ObjectEntrySet()) {
             if (entry.getValue() == null) continue;
 
@@ -333,12 +362,10 @@ public class WaterHandler {
             }
 
             if (scanner.isFinished()) {
-//                finishedScanners.add(chunkPosL);
                 scanners.put(chunkPosL, null);
                 MinecraftClient.getInstance().player.playSound(SoundEvents.ITEM_TRIDENT_HIT_GROUND, 0.25f, 1f);
             }
         }
-//        finishedScanners.forEach(scannerPosL -> this.scanners.remove(scannerPosL));
     }
 
     /**
@@ -530,7 +557,8 @@ public class WaterHandler {
     public void removeChunkFromTrackers(long chunkPosL) {
         this.waitingWaterBlocks.remove(chunkPosL);
         this.shoreBlocks.remove(chunkPosL);
-        this.siteCache.remove(chunkPosL);
+        this.waterCache.remove(chunkPosL);
+        this.waterDistCache.remove(chunkPosL);
         this.sites.remove(chunkPosL);
         this.cachedSiteSet.clear(); //resets it
     }
@@ -539,7 +567,8 @@ public class WaterHandler {
         this.waitingWaterBlocks.clear();
         this.shoreBlocks.clear();
         this.sites.clear();
-        this.siteCache.clear();
+        this.waterCache.clear();
+        this.waterDistCache.clear();
         this.cachedSiteSet.clear();
     }
 }
