@@ -54,6 +54,12 @@ public class DebugHelper {
         return PlayerInventory.isValidHotbarIndex(playerInventory.getSlotWithStack(Items.CLOCK.getDefaultStack()));
     }
 
+    public static boolean offhandClock() {
+        MinecraftClient client = MinecraftClient.getInstance();
+        ClientPlayerEntity player = client.player;
+        return player.getOffHandStack().isOf(Items.CLOCK);
+    }
+
     public static boolean usingShield() {
         MinecraftClient client = MinecraftClient.getInstance();
         ClientPlayerEntity player = client.player;

@@ -19,7 +19,7 @@ import net.minecraft.particle.ParticleType;
 import net.minecraft.util.dynamic.Codecs;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
-import net.superkat.tidal.Tidal;
+import net.superkat.tidal.TidalParticles;
 import org.joml.Vector3f;
 
 import java.awt.*;
@@ -141,7 +141,7 @@ public class DebugWaveMovementParticle extends DebugAbstractColoredParticle<Debu
 
         @Override
         public ParticleType<DebugWaveMovementParticleEffect> getType() {
-            return Tidal.DEBUG_WAVEMOVEMENT_PARTICLE;
+            return TidalParticles.DEBUG_WAVEMOVEMENT_PARTICLE;
         }
 
         public float getYaw() {

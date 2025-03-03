@@ -5,10 +5,11 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientChunkEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientWorldEvents;
 import net.fabricmc.fabric.api.client.particle.v1.ParticleFactoryRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.InvalidateRenderStateCallback;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.client.MinecraftClient;
 import net.superkat.tidal.duck.TidalWorld;
 import net.superkat.tidal.event.ClientBlockUpdateEvent;
+import net.superkat.tidal.particles.WaveParticle;
+import net.superkat.tidal.particles.WhiteWaveParticle;
 import net.superkat.tidal.particles.debug.DebugShoreParticle;
 import net.superkat.tidal.particles.debug.DebugWaterParticle;
 import net.superkat.tidal.particles.debug.DebugWaveMovementParticle;
@@ -17,9 +18,13 @@ public class TidalClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
-        ParticleFactoryRegistry.getInstance().register(Tidal.DEBUG_WATERBODY_PARTICLE, DebugWaterParticle.Factory::new);
-        ParticleFactoryRegistry.getInstance().register(Tidal.DEBUG_SHORELINE_PARTICLE, DebugShoreParticle.Factory::new);
-        ParticleFactoryRegistry.getInstance().register(Tidal.DEBUG_WAVEMOVEMENT_PARTICLE, DebugWaveMovementParticle.Factory::new);
+
+        ParticleFactoryRegistry.getInstance().register(TidalParticles.WAVE_PARTICLE, WaveParticle.Factory::new);
+        ParticleFactoryRegistry.getInstance().register(TidalParticles.WHITE_WAVE_PARTICLE, WhiteWaveParticle.Factory::new);
+
+        ParticleFactoryRegistry.getInstance().register(TidalParticles.DEBUG_WATERBODY_PARTICLE, DebugWaterParticle.Factory::new);
+        ParticleFactoryRegistry.getInstance().register(TidalParticles.DEBUG_SHORELINE_PARTICLE, DebugShoreParticle.Factory::new);
+        ParticleFactoryRegistry.getInstance().register(TidalParticles.DEBUG_WAVEMOVEMENT_PARTICLE, DebugWaveMovementParticle.Factory::new);
 
         //Called after joining a world, or changing dimensions
         ClientWorldEvents.AFTER_CLIENT_WORLD_CHANGE.register((client, world) -> {
@@ -53,10 +58,6 @@ public class TidalClient implements ClientModInitializer {
             TidalWorld tidalWorld = (TidalWorld) client.world;
             tidalWorld.tidal$tidalWaveHandler().reloadNearbyChunks();
             tidalWorld.tidal$tidalWaveHandler().waterHandler.rebuild();
-        });
-
-        WorldRenderEvents.BEFORE_DEBUG_RENDER.register(context -> {
-            MinecraftClient.getInstance().debugRenderer.structureDebugRenderer.render(context.matrixStack(), context.consumers(), context.camera().getPos().getX(), context.camera().getPos().getY(), context.camera().getPos().getZ());
         });
     }
 }

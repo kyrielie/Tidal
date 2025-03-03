@@ -49,6 +49,7 @@ public class SitePos {
     public void updateYaw() {
         this.yawCalculated = true;
         this.yaw = (float) Math.toDegrees(Math.atan2(pos.getZ() - centerZ, pos.getX() - centerX));
+        this.yaw = Math.round(this.yaw / 15f) * 15f;
     }
 
     public float getYaw() {

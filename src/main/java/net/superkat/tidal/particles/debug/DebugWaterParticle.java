@@ -14,7 +14,7 @@ import net.minecraft.network.codec.PacketCodecs;
 import net.minecraft.particle.AbstractDustParticleEffect;
 import net.minecraft.particle.ParticleType;
 import net.minecraft.util.dynamic.Codecs;
-import net.superkat.tidal.Tidal;
+import net.superkat.tidal.TidalParticles;
 import org.joml.Vector3f;
 
 public class DebugWaterParticle extends DebugAbstractColoredParticle<DebugWaterParticle.DebugWaterParticleEffect> {
@@ -58,7 +58,7 @@ public class DebugWaterParticle extends DebugAbstractColoredParticle<DebugWaterP
 
         @Override
         public ParticleType<DebugWaterParticleEffect> getType() {
-            return Tidal.DEBUG_WATERBODY_PARTICLE;
+            return TidalParticles.DEBUG_WATERBODY_PARTICLE;
         }
     }
 

@@ -203,6 +203,8 @@ public class WaterHandler {
             double dx = pos.getX() + 0.5 - site.getX();
             double dz = pos.getZ() + 0.5 - site.getZ();
             double checkDist = dx * dx + dz * dz;
+//            double checkDist = Math.max(Math.abs(dx), Math.abs(dz));
+//            double checkDist = Math.abs(dx) + Math.abs(dz);
 
             if(closest == null || checkDist < distance) {
                 closest = site;
@@ -212,6 +214,7 @@ public class WaterHandler {
 
         if(closest != null) {
             int intDistance = (int) Math.sqrt(distance);
+//            int intDistance = (int) distance;
             this.waterDistCache.computeIfAbsent(
                     chunkPosL, chunkPosL2 -> new Int2ObjectOpenHashMap<>()
             ).computeIfAbsent(

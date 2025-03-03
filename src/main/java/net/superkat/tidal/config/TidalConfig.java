@@ -9,6 +9,6 @@ public class TidalConfig {
     public static int chunkUpdatesRescanAmount = 50;
 
     public static int waveTicks = 20; //dummy value
-    public static int waveDistFromShore = 5;
+    public static int waveDistFromShore = 8;
 
 }
