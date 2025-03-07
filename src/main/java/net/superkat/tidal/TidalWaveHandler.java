@@ -2,6 +2,8 @@ package net.superkat.tidal;
 
 import com.google.common.collect.Sets;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
@@ -15,19 +17,16 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.math.random.Random;
 import net.minecraft.world.chunk.WorldChunk;
 import net.superkat.tidal.config.TidalConfig;
-import net.superkat.tidal.particles.WaveParticleEffect;
 import net.superkat.tidal.particles.debug.DebugWaveMovementParticle;
-import net.superkat.tidal.water.DebugHelper;
+import net.superkat.tidal.renderer.WaveRenderer;
+import net.superkat.tidal.renderer.WaveSegment;
 import net.superkat.tidal.water.SitePos;
 import net.superkat.tidal.water.WaterHandler;
 
 import java.awt.*;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * The main handler, used for spawning/handling tidal waves, as well as ticking the world's {@link WaterHandler}
@@ -35,12 +34,17 @@ import java.util.stream.Collectors;
 public class TidalWaveHandler {
     public final ClientWorld world;
     public WaterHandler waterHandler;
+    public WaveRenderer renderer;
+
+//    public ObjectArrayList<Wave> waves = new ObjectArrayList<>();
+    public ObjectArrayList<WaveSegment> waves = new ObjectArrayList<>();
 
     public boolean nearbyChunksLoaded = false;
 
     public TidalWaveHandler(ClientWorld world) {
         this.world = world;
-        this.waterHandler = new WaterHandler(world, this);
+        this.waterHandler = new WaterHandler(this, world);
+        this.renderer = new WaveRenderer(this, world);
     }
 
     public void reloadNearbyChunks() {
@@ -64,278 +68,331 @@ public class TidalWaveHandler {
         debugTick(client, player);
     }
 
+    public void render(WorldRenderContext context) {
+        this.renderer.render(context);
+    }
+
     /**
      * Tick method for waves
      */
     public void tidalTick() {
+        if(!this.world.getTickManager().shouldTick()) return;
         //cursed but should sync up
         //TODO - either find consistent way of finding chunks within config distance that would sync up with
         // other people with the same config distance without destroying performance, or throw out synced waves entirely
         if(this.world.getTime() % 40 == 0) {
-            spawnWave();
+            spawnAllWaves();
         }
 
-    }
 
-    public void spawnWave() {
-        int distFromShore = TidalConfig.waveDistFromShore;
-//        int distFromShore = this.world.getTime() % 80 == 0 ? 5 : TidalConfig.waveDistFromShore;
-//        if(this.world.getTime() % 40 == 20) {
-//            distFromShore = 5;
-//        }
-        ChunkPos spawnChunkPos = this.getSyncedRandomChunk();
 
-        if(DebugHelper.clockInHotbar() || DebugHelper.offhandClock()) {
-            ChunkPos playerChunk = MinecraftClient.getInstance().player.getChunkPos();
-            int radius = 3;
-            ChunkPos start = new ChunkPos(playerChunk.x + radius, playerChunk.z + radius);
-            ChunkPos end = new ChunkPos(playerChunk.x - radius, playerChunk.z - radius);
-            Set<BlockPos> waterBlocks = ChunkPos.stream(start, end).map(chunkPos -> this.waterHandler.getWaterCacheAtDistance(chunkPos, distFromShore)).filter(Objects::nonNull).flatMap(Collection::stream).collect(Collectors.toSet());
-//            for (ChunkPos chunkPos : ChunkPos.stream(start, end).toList()) {
-//                Set<BlockPos> waterBlocks = this.waterHandler.getWaterCacheAtDistance(chunkPos, distFromShore);
-//                if(waterBlocks == null) continue;
-                if(DebugHelper.clockInHotbar()) {
-                    debugWaveParticles(waterBlocks);
-                } if(DebugHelper.offhandClock()) {
 
-                    Set<BlockPos> spawnableWaterBlocks = this.getSpawnableWaterBlocks(waterBlocks, 3);
-                    for (BlockPos water : spawnableWaterBlocks) {
-                        Vec3d pos = water.toCenterPos();
-                        this.world.addParticle(ParticleTypes.END_ROD, pos.getX(), pos.getY() + 2.5, pos.getZ(), 0, 0, 0);
-                    }
+        //TODO - optimize wave merge check here (this hurts my soul)
+        //TODO - Create algro to sort a wave's segments in a line for rendering(choose random, check 3x3, for each block found check its 3x3, etc. - then ask Hama or Echo to optimize it ¯\_(ツ)_/¯)
 
-//                    List<BlockPos> checkedBlocks = new ArrayList<>();
-//                    float i = 0;
-//                    for (BlockPos water : waterBlocks) {
+        //tick waves
+//        for (ObjectListIterator<Wave> iterator = this.getWaves().iterator(); iterator.hasNext();) {
+//            Wave wave = iterator.next();
+//            wave.tick();
 //
-//                        if(checkedBlocks.contains(water)) continue;
-//                        Vec3d pos = water.toCenterPos();
-//                        this.world.addParticle(ParticleTypes.END_ROD, pos.getX(), pos.getY() + 2.5, pos.getZ(), 0, 0, 0);
-//
-//                        List<BlockPos> line = Lists.newArrayList();
-//                        List<BlockPos> neighbours = Lists.newArrayList();
-//
-//                        for (BlockPos checkPos : BlockPos.iterate(water.add(-1, 0, -1), water.add(1, 0,1))) {
-//                            if(!waterBlocks.contains(checkPos)) continue;
-//                            if(checkedBlocks.contains(checkPos)) continue;
-//                            if(checkPos.getX() == water.getX() && checkPos.getZ() == water.getZ()) continue;
-//                            Vec3d checkPos1 = checkPos.toCenterPos();
-//                            neighbours.add(new BlockPos(checkPos.getX(), checkPos.getY(), checkPos.getZ()));
-//                            this.world.addParticle(ParticleTypes.WAX_ON, checkPos1.getX(), checkPos1.getY() + 1.5, checkPos1.getZ(), 0, world.random.nextGaussian(), 0);
-//                        }
-//
-////                        checkedBlocks.addAll(neighbours);
-//                        if(neighbours.isEmpty()) continue;
-//                        BlockPos neighbour = neighbours.getFirst();
-//                        line.add(neighbour);
-//                        int offsetX = water.getX() - neighbour.getX();
-//                        int offsetZ = water.getZ() - neighbour.getZ();
-//
-//                        while(true) {
-//                            BlockPos checkPos = neighbour.add(offsetX * line.size(), 0, offsetZ * line.size());
-//                            if(waterBlocks.contains(checkPos)) {
-//                                line.add(checkPos);
-//                            } else {
-//                                break;
-//                            }
-//                        }
-//
-//                        checkedBlocks.addAll(line);
-//                        i += 0.1f;
-//                        for (BlockPos linePos : line) {
-//                            Vec3d linePos1 = linePos.toCenterPos();
-//                            this.world.addParticle(ParticleTypes.WAX_OFF, linePos1.getX(), linePos1.getY() + 2, linePos1.getZ(), 0, i, 0);
-//                        }
-//
-//
-//
-//
-//                        int length = 0;
-//                        boolean lengthAdded;
-//                        for (Direction direction : Direction.Type.HORIZONTAL) {
-//                            do {
-//                                lengthAdded = waterBlocks.contains(block.offset(direction, length + 1));
-//                                if (lengthAdded) length++;
-//                            } while (lengthAdded);
-//                            if(length != 0) break;
-//                        }
-//                        this.world.addParticle(ParticleTypes.WAX_ON, water.getX() + 0.5, water.getY() + 2.5, water.getZ() + 0.5, 0, 0, 0);
-//                        if(checkedBlocks.contains(water)) continue;
-//                        List<BlockPos> line = Lists.newArrayList();
-//                        List<BlockPos> dLine = Lists.newArrayList();
-//                        for (BlockPos checkPosD : BlockPos.iterate(water.add(-1, 0, -1), water.add(1, 0, 1))) {
-//                            if(!waterBlocks.contains(checkPosD)) continue;
-//                            if(checkPosD.getX() == water.getX() && checkPosD.getZ() == water.getZ()) continue;
-//                            dLine.add(new BlockPos(checkPosD));
-//                        }
-//
-//                        if(dLine.isEmpty()) continue;
-//                        for (BlockPos e : dLine) {
-//                            this.world.addParticle(ParticleTypes.WAX_OFF, e.getX() + 0.5, e.getY() + 3 + i, e.getZ() + 0.5, 0, 0, 0);
-//                        }
-//                        BlockPos neighbour = dLine.getFirst();
-//                        BlockPos offsetAmount = water.subtract(neighbour);
-//                        line.add(neighbour);
-//                        boolean hasLineNeighbour = true;
-//                        do {
-//                            BlockPos checkPos = new BlockPos(neighbour).add(offsetAmount.multiply(line.size()));
-//                            hasLineNeighbour = waterBlocks.contains(checkPos);
-//                            if(hasLineNeighbour) {
-//                                line.add(checkPos);
-//                            }
-//                        } while(hasLineNeighbour);
-//                        checkedBlocks.addAll(line);
-//
-//                        int centerX = line.stream().mapToInt(BlockPos::getX).sum() / line.size();
-//                        int centerZ = line.stream().mapToInt(BlockPos::getZ).sum() / line.size();
-//                        Vec3d block = new BlockPos(centerX, water.getY(), centerZ).toCenterPos();
-//                        this.world.addParticle(ParticleTypes.END_ROD, block.getX(), block.getY() + 2.5, block.getZ(), 0, line.size() / 32f, 0);
-//                    }
-                }
+//            if(wave.isDead()) {
+//                iterator.remove();
+//                continue;
 //            }
-            return;
-        }
+//
+//            double minDist = 4;
+//            boolean shortCircuit = false;
+//            for (Wave checkWave : this.getWaves()) {
+//                for (WaveSegment checkSegment : checkWave.getWaveSegments()) {
+//                    for (WaveSegment thisSegment : wave.getWaveSegments()) {
+//                        double dist = thisSegment.getBlockPos().getSquaredDistance(checkSegment.getBlockPos());
+//                        if(dist <= minDist) {
+//                            if(checkWave == wave) continue;
+//                            wave.merge(checkWave);
+//                            shortCircuit = true;
+//                            break;
+//                        }
+//                    }
+//                    if(shortCircuit) break;
+//                }
+//                if(shortCircuit) break;
+//            }
+//
+////            WaveSegment min = mins.get(wave);
+////            WaveSegment max = maxs.get(wave);
+////            if(min != null && max != null) {
+////                boolean shortCircuit = false;
+////                double minDist = 4;
+////
+////                for (Map.Entry<Wave, WaveSegment> check : mins.entrySet()) {
+////                    Wave checkWave = check.getKey();
+////                    WaveSegment checkSegment = check.getValue();
+////                    double dist = checkSegment.getBlockPos().getSquaredDistance(min.getBlockPos());
+////                    if(dist <= minDist) {
+////                        if(checkWave == wave) continue;
+////                        wave.merge(checkWave);
+////                        shortCircuit = true;
+////                        break;
+////                    }
+////                }
+////
+////                if(shortCircuit) continue;
+////
+////                for (Map.Entry<Wave, WaveSegment> check : maxs.entrySet()) {
+////                    Wave checkWave = check.getKey();
+////                    WaveSegment checkSegment = check.getValue();
+////                    double dist = checkSegment.getBlockPos().getSquaredDistance(max.getBlockPos());
+////                    if(dist <= minDist) {
+////                        if(checkWave == wave) continue;
+////                        wave.merge(checkWave);
+////                        break;
+////                    }
+////                }
+////            }
+//
+//        }
 
-        if(DebugHelper.spyglassInHotbar()) spawnChunkPos = MinecraftClient.getInstance().player.getChunkPos();
-        Set<BlockPos> waterBlocks = this.waterHandler.getWaterCacheAtDistance(spawnChunkPos, distFromShore);
-        if(waterBlocks == null) return; //TODO choose random chunk within radius if null
-
-        debugWaveParticles(waterBlocks);
     }
 
-    private Set<BlockPos> getSpawnableWaterBlocks(Set<BlockPos> waterBlocks, int radius) {
-        Set<BlockPos> returnBlocks = Sets.newHashSet();
-        Set<BlockPos> checkedBlocks = Sets.newHashSet();
+//    public ObjectArrayList<Wave> getWaves() {
+//        return this.waves;
+//    }
 
-        for (BlockPos water : waterBlocks) {
-            if(checkedBlocks.contains(water)) continue;
-            for (BlockPos checkPos : BlockPos.iterate(water.add(-radius, 0, -radius), water.add(radius, 0, radius))) {
-                if(!waterBlocks.contains(checkPos)) continue;
-                checkedBlocks.add(new BlockPos(checkPos));
+    public ObjectArrayList<WaveSegment> getWaves() {
+        return this.waves;
+    }
+
+    public void spawnAllWaves() {
+        if(!DebugHelper.clockInHotbar() && !DebugHelper.offhandClock()) return;
+        int distFromShore = TidalConfig.waveDistFromShore;
+        int chunkRadius = 3;
+        int spawnBlockRadius = 1;
+
+        ChunkPos playerChunk = MinecraftClient.getInstance().player.getChunkPos();
+        ChunkPos start = new ChunkPos(playerChunk.x + chunkRadius, playerChunk.z + chunkRadius);
+        ChunkPos end = new ChunkPos(playerChunk.x - chunkRadius, playerChunk.z - chunkRadius);
+//        Set<BlockPos> waterBlocks = ChunkPos.stream(start, end).map(chunkPos -> this.waterHandler.getWaterCacheAtDistance(chunkPos, distFromShore)).filter(Objects::nonNull).flatMap(Collection::stream).collect(Collectors.toSet());
+//        if(waterBlocks.isEmpty()) return;
+        for (ChunkPos chunkPos : ChunkPos.stream(start, end).toList()) {
+            Set<BlockPos> waterBlocks = this.waterHandler.getWaterCacheAtDistance(chunkPos, distFromShore);
+            if(waterBlocks == null) continue;
+    //        Set<BlockPos> spawnableWaterBlocks = this.reduceWaterBlocks(waterBlocks, spawnBlockRadius);
+            spawnWave(waterBlocks);
+
+            if(DebugHelper.holdingSpyglass()) debugWaveParticles(waterBlocks);
+    //        if(DebugHelper.offhandSpyglass()) debugWaveParticles(spawnableWaterBlocks);
+            if(DebugHelper.offhandClock()) {
+                for (BlockPos water : waterBlocks) {
+                    Vec3d pos = water.toCenterPos();
+                    this.world.addParticle(ParticleTypes.END_ROD, pos.getX(), pos.getY() + 2.5, pos.getZ(), 0, 0, 0);
+                }
             }
-            returnBlocks.add(water);
+
         }
-        return returnBlocks;
     }
+
+    public void spawnWave(Set<BlockPos> waterBlocks) {
+        for (BlockPos water : waterBlocks) {
+            SitePos site = this.waterHandler.getSiteForPos(water);
+            if(site == null || !site.yawCalculated) continue;
+            if(site.xList.size() < 50) continue;
+
+            float yaw = site.getYaw();
+            WaveSegment waveSegment = new WaveSegment(water, yaw);
+            this.waves.add(waveSegment);
+        }
+    }
+
+//    public void spawnWave(Set<BlockPos> allWaterBlocks) {
+//        Set<BlockPos> waterBlocks = new HashSet<>(allWaterBlocks);
+//        while(!waterBlocks.isEmpty()) {
+//            List<BlockPos> sortedBlocks = sortBlocks(waterBlocks);
+//            Wave wave = new Wave(this, this.world);
+//
+//            for (BlockPos water : sortedBlocks) {
+//                SitePos site = this.waterHandler.getSiteForPos(water);
+//                if(site == null || !site.yawCalculated || site.xList.size() < 50) continue;
+//
+//                float yaw = site.getYaw();
+//                wave.add(new WaveSegment(water, yaw));
+//            }
+//
+//            this.waves.add(wave);
+//        }
+//
+////        List<BlockPos> sortedBlocks = sortBlocks(waterBlocks);
+////        Wave wave = new Wave(this, this.world);
+////
+////        for (BlockPos water : sortedBlocks) {
+////            SitePos site = this.waterHandler.getSiteForPos(water);
+////            if(site == null || !site.yawCalculated || site.xList.size() < 50) continue;
+////
+////            float yaw = site.getYaw();
+////            wave.add(new WaveSegment(water, yaw));
+////        }
+////
+////        this.waves.add(wave);
+//
+//
+////        double maxDist = 10 * 10; //squared because dist calc is squared for now
+//
+////        List<BlockPos> sortedWaters = waterBlocks.stream().sorted(Comparator.comparingInt(pos -> (pos.getX() + pos.getZ()))).toList();
+//
+////        int j = 0;
+////        for (BlockPos block : waterBlocks) {
+////            Color color = DebugHelper.debugTransitionColor(j, waterBlocks.size());
+////            j++;
+////            ParticleEffect particleEffect = new DebugWaterParticle.DebugWaterParticleEffect(Vec3d.unpackRgb(color.getRGB()).toVector3f(), 1f);
+////            this.world.addParticle(particleEffect, true, block.getX(), block.getY() + 5, block.getZ(), 0, 0, 0);
+////        }
+//
+////        for (BlockPos water : waterBlocks) {
+////            SitePos site = this.waterHandler.getSiteForPos(water);
+////            if(site == null || !site.yawCalculated || site.xList.size() < 50) continue;
+////
+////            float yaw = site.getYaw();
+////            Wave wave = new Wave(this, this.world, water, yaw);
+////            this.waves.add(wave);
+////        }
+//
+//
+////        Wave wave = new Wave(this, this.world);
+////
+////        for (int i = 0; i < sortedWaters.size() - 1; i++) {
+////            BlockPos water = sortedWaters.get(i);
+////            BlockPos nextWater = sortedWaters.get(i + 1);
+////            double dist = water.getSquaredDistance(nextWater);
+////            if(dist <= maxDist) {
+////                SitePos site = this.waterHandler.getSiteForPos(water);
+////                if(site == null || !site.yawCalculated || site.xList.size() < 50) continue;
+////
+////                float yaw = site.getYaw();
+////                WaveSegment waveSegment = new WaveSegment(water, yaw);
+////                wave.add(waveSegment);
+////            } else {
+////                if(!wave.getWaveSegments().isEmpty()) {
+////                    this.waves.add(wave);
+////                    wave.sortSegments();
+////                }
+////                wave = new Wave(this, this.world);
+////            }
+////        }
+////
+////        if(!this.waves.contains(wave)) {
+////            this.waves.add(wave);
+////            wave.sortSegments();
+////        }
+//
+////        boolean farParticles = false;
+////        WaveParticleEffect particleEffect = createWave(waterBlocks.stream().toList(), 0.15f, 1f, 200);
+////
+////        Vec3d pos = chunkPos.getCenterAtY((int) MinecraftClient.getInstance().player.getY()).toCenterPos();
+////        float yRandom = (float) (this.world.random.nextFloat() / 4f);
+////        this.world.addParticle(particleEffect, farParticles, pos.getX(), pos.getY() + 0.75 + yRandom, pos.getZ(), 0, 0,0);
+//    }
+//
+//    //TODO make this work with loops
+//    public List<BlockPos> sortBlocks(Set<BlockPos> waterBlocks) {
+//        List<BlockPos> blocks = waterBlocks.stream().toList();
+//
+//        //find last block
+//        List<BlockPos> visited = Lists.newArrayList();
+//
+//        Queue<BlockPos> queue = Queues.newArrayDeque();
+//        BlockPos start = blocks.getFirst();
+//        queue.add(start);
+//
+//        while(!queue.isEmpty()) {
+//            BlockPos pos = queue.poll();
+//            visited.add(pos);
+//            for (BlockPos neighbour : BlockPos.iterate(pos.add(-1, 0, -1), pos.add(1, 0, 1))) {
+//                if(!blocks.contains(neighbour)) continue;
+//                if(visited.contains(neighbour)) continue;
+//                queue.add(new BlockPos(neighbour));
+//            }
+//        }
+//
+//        visited.forEach(waterBlocks::remove);
+//
+//        BlockPos end = visited.getLast();
+//        this.world.addParticle(ParticleTypes.WITCH, end.getX(), end.getY() + 5, end.getZ(), 0, 0, 0);
+//
+//        //go from last block to other end
+//        List<BlockPos> result = Lists.newArrayList();
+//        queue.clear();
+//        queue.add(end);
+//        while(!queue.isEmpty()) {
+//            BlockPos pos = queue.poll();
+//            result.add(pos);
+//            for (BlockPos neighbour : BlockPos.iterate(pos.add(-1, 0, -1), pos.add(1, 0, 1))) {
+//                if(!blocks.contains(neighbour)) continue;
+//                if(result.contains(neighbour)) continue;
+//                queue.add(new BlockPos(neighbour));
+//            }
+//        }
+//
+//        return result;
+//    }
+//
+//    private WaveParticleEffect createWave(List<BlockPos> waterBlocks, float speed, float scale, int maxAge) {
+//        int minSiteAmount = 50;
+//        List<Float> yaws = Lists.newArrayList();
+//        List<BlockPos> usedWater = waterBlocks.stream().filter(pos -> {
+//            SitePos site = this.waterHandler.getSiteForPos(pos);
+//            if(site == null || !site.yawCalculated) return false;
+//            if(site.xList.size() < minSiteAmount) return false;
+//            yaws.add(site.yaw);
+//            return true;
+//        }).toList();
+//        return new WaveParticleEffect(
+//                yaws,
+//                speed,
+//                scale,
+//                usedWater,
+//                maxAge
+//        );
+//    }
+//
+//    private Set<BlockPos> reduceWaterBlocks(Set<BlockPos> waterBlocks, int radius) {
+//        Set<BlockPos> returnBlocks = Sets.newHashSet();
+//        Set<BlockPos> checkedBlocks = Sets.newHashSet();
+//
+//        for (BlockPos water : waterBlocks) {
+//            if(checkedBlocks.contains(water)) continue;
+//            for (BlockPos checkPos : BlockPos.iterate(water.add(-radius, 0, -radius), water.add(radius, 0, radius))) {
+//                if(!waterBlocks.contains(checkPos)) continue;
+//                checkedBlocks.add(new BlockPos(checkPos));
+//            }
+//            returnBlocks.add(water);
+//        }
+//        return returnBlocks;
+//    }
+//
+//    private Set<BlockPos> getSpawnableWaterBlocks(Set<BlockPos> waterBlocks, int minSiteAmount) {
+//        return waterBlocks.stream().filter(pos -> {
+//            SitePos site = this.waterHandler.getSiteForPos(pos);
+//            if(site == null || !site.yawCalculated) return false;
+//            return site.xList.size() >= minSiteAmount;
+//        }).collect(Collectors.toSet());
+//    }
 
     public void debugWaveParticles(Set<BlockPos> waterBlocks) {
         Color color = Color.WHITE; //activates the movement particle's custom colors
 //        Color color = Color.LIGHT_GRAY; //deactivates the movement particle's custom colors
         boolean farParticles = false;
 
-        boolean even = this.world.getTime() % 80 == 0;
-
-        Set<BlockPos> spawnableWaterBlocks = this.getSpawnableWaterBlocks(waterBlocks, 3);
-        for (BlockPos water : spawnableWaterBlocks) {
-//            Vec3d pos = water.toCenterPos();
-//            this.world.addParticle(ParticleTypes.END_ROD, pos.getX(), pos.getY() + 2.5, pos.getZ(), 0, 0, 0);
-//        }
-
-//        List<BlockPos> checkedBlocks = new ArrayList<>();
-
-//        for (BlockPos water : waterBlocks) {
+        for (BlockPos water : waterBlocks) {
             SitePos site = this.waterHandler.getSiteForPos(water);
             if(site == null || !site.yawCalculated) continue;
-            if(site.xList.size() < 50) continue;
+//            if(site.xList.size() < 50) continue;
 
-//            if(checkedBlocks.contains(water)) continue;
-
-//            List<BlockPos> line = Lists.newArrayList();
-//            List<BlockPos> neighbours = Lists.newArrayList();
-//
-//            for (BlockPos checkPos : BlockPos.iterate(water.add(-1, 0, -1), water.add(1, 0,1))) {
-//                if(!waterBlocks.contains(checkPos)) continue;
-//                if(checkedBlocks.contains(checkPos)) continue;
-//                if(checkPos.getX() == water.getX() && checkPos.getZ() == water.getZ()) continue;
-//                Vec3d checkPos1 = checkPos.toCenterPos();
-//                neighbours.add(new BlockPos(checkPos.getX(), checkPos.getY(), checkPos.getZ()));
-//                this.world.addParticle(ParticleTypes.WAX_ON, checkPos1.getX(), checkPos1.getY() + 1.5, checkPos1.getZ(), 0, world.random.nextGaussian(), 0);
-//            }
-
-//                        checkedBlocks.addAll(neighbours);
-//            if(neighbours.isEmpty()) continue;
-//            BlockPos neighbour = neighbours.getFirst();
-//            line.add(neighbour);
-//            int offsetX = water.getX() - neighbour.getX();
-//            int offsetZ = water.getZ() - neighbour.getZ();
-//
-//            while(true) {
-//                BlockPos checkPos = neighbour.add(offsetX * line.size(), 0, offsetZ * line.size());
-//                if(waterBlocks.contains(checkPos)) {
-//                    line.add(checkPos);
-//                } else {
-//                    break;
-//                }
-//            }
-//
-//            checkedBlocks.addAll(line);
-//            Vec3d block = new BlockPos(centerX, water.getY(), centerZ).toCenterPos();
-
-
-
-//            int evenCheck = (water.getX() + water.getZ()) % 2;
-//
-//            if(evenCheck == 0 && !even) continue;
-//            else if(evenCheck != 0 && even) continue;
-
-//            float scale = site.xList.size() > 300 ? 1.5f : site.xList.size() / 200f;
-
-//            if(water.getX() % 2 == 0 && !even) continue;
-//            else if(water.getX() % 2 != 0 && even) continue;
-
-//            if(site.xList.size() <= 50) continue;
-
-//            float scale = (site.xList.size() > 500) ? ((float) 3f) : ((float) site.xList.size() / 100);
-
-//            int length = 0;
-//            boolean lengthAdded;
-//            for (Direction direction : Direction.Type.HORIZONTAL) {
-//                do {
-//                    BlockPos checkPos = water.offset(direction, length + 1);
-//                    lengthAdded = waterBlocks.contains(checkPos);
-//                    if (lengthAdded) {
-//                        length++;
-//                        checkedBlocks.add(checkPos);
-//                        if(length >= 4) break;
-//                    }
-//                } while (lengthAdded);
-////                if(length != 0) break;
-//            }
-
-//            if(length < 2) continue;
-
-//            int centerX = waterBlocks.stream().mapToInt(Vec3i::getX).sum() / waterBlocks.size();
-//            int centerZ = waterBlocks.stream().mapToInt(Vec3i::getZ).sum() / waterBlocks.size();
-//            Optional<BlockPos> center = waterBlocks.stream().filter(pos -> pos.getX() == centerX || pos.getZ() == centerZ).findAny();
-//            if(center.isEmpty()) continue;
-
-            WaveParticleEffect particleEffect = new WaveParticleEffect(
-                    site.getYaw(),
-                    0.15f,
-//                    MathHelper.clamp(site.xList.size() / 200f, 1f, 3f),
+            DebugWaveMovementParticle.DebugWaveMovementParticleEffect particleEffect = new DebugWaveMovementParticle.DebugWaveMovementParticleEffect(
+                    Vec3d.unpackRgb(color.getRGB()).toVector3f(),
                     1f,
-                    waterBlocks.stream().toList(),
-//                    3,
-                    200
-        //            0.2f,
-//                    2f,
-//                    1,
-//                    40
-            );
-
-//            Vec3d pos = new BlockPos(centerX, water.getY(), centerZ).toCenterPos();
-            Vec3d pos = water.toCenterPos();
-//            Vec3d pos = center.get().toCenterPos();
-            float yRandom = (float) (this.world.random.nextFloat() / 4f);
-            this.world.addParticle(particleEffect, farParticles, pos.getX(), pos.getY() + 0.75 + yRandom, pos.getZ(), 0, 0,0);
-
-//            DebugWaveMovementParticle.DebugWaveMovementParticleEffect particleEffect = new DebugWaveMovementParticle.DebugWaveMovementParticleEffect(
-//                    Vec3d.unpackRgb(color.getRGB()).toVector3f(),
-//                    1f,
-//                    site.getYaw(),
-//                    0.3f,
-//                    20);
-//            this.world.addParticle(particleEffect, farParticles, water.getX(), water.getY() + 2, water.getZ(), 0, 0,0);
+                    site.getYaw(),
+                    0.3f,
+                    20);
+            this.world.addParticle(particleEffect, farParticles, water.getX(), water.getY() + 2, water.getZ(), 0, 0,0);
         }
     }
 

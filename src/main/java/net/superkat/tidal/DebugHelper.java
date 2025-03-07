@@ -1,12 +1,12 @@
-package net.superkat.tidal.water;
+package net.superkat.tidal;
 
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.Items;
 import net.minecraft.sound.SoundEvents;
+import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.random.Random;
-import net.superkat.tidal.TidalWaveHandler;
 
 import java.awt.*;
 
@@ -44,6 +44,18 @@ public class DebugHelper {
         ClientPlayerEntity player = client.player;
         PlayerInventory playerInventory = player.getInventory();
         return PlayerInventory.isValidHotbarIndex(playerInventory.getSlotWithStack(Items.SPYGLASS.getDefaultStack()));
+    }
+
+    public static boolean holdingSpyglass() {
+        MinecraftClient client = MinecraftClient.getInstance();
+        ClientPlayerEntity player = client.player;
+        return player.getMainHandStack().isOf(Items.SPYGLASS);
+    }
+
+    public static boolean offhandSpyglass() {
+        MinecraftClient client = MinecraftClient.getInstance();
+        ClientPlayerEntity player = client.player;
+        return player.getOffHandStack().isOf(Items.SPYGLASS);
     }
 
     //stop making fun of my choices of debug items - it's because i watch bdubs
@@ -101,6 +113,18 @@ public class DebugHelper {
         int red = (i % 3 == 0 ? i1 : i % 3 == 1 ? i2 : i3);
         int green = (i % 3 == 1 ? i1 : i % 3 == 2 ? i2 : i3);
         int blue = (i % 3 == 2 ? i1 : i % 3 == 0 ? i2 : i3);
+        return new Color(checkColor(red), checkColor(green), checkColor(blue));
+    }
+
+    public static Color debugTransitionColor(int i, int size) {
+        return debugTransitionColor(i, size, Color.WHITE, Color.BLACK);
+    }
+
+    public static Color debugTransitionColor(int i, int size, Color start, Color end) {
+        float delta = ((float) (i) / (size));
+        int red = MathHelper.lerp(delta, start.getRed(), end.getRed());
+        int green = MathHelper.lerp(delta, start.getGreen(), end.getGreen());
+        int blue = MathHelper.lerp(delta, start.getBlue(), end.getBlue());
         return new Color(checkColor(red), checkColor(green), checkColor(blue));
     }
 

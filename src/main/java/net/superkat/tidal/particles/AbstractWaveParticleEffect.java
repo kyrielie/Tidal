@@ -14,10 +14,10 @@ import java.util.List;
 
 public abstract class AbstractWaveParticleEffect implements ParticleEffect {
 
-    public static <T extends AbstractWaveParticleEffect>MapCodec<T> createCodec(Function5<Float, Float, Float, List<BlockPos>, Integer, T> particle) {
+    public static <T extends AbstractWaveParticleEffect>MapCodec<T> createCodec(Function5<List<Float>, Float, Float, List<BlockPos>, Integer, T> particle) {
         return RecordCodecBuilder.mapCodec(
             instance -> instance.group(
-                            Codecs.POSITIVE_FLOAT.fieldOf("yaw").forGetter(effect -> effect.yaw),
+                            Codecs.POSITIVE_FLOAT.listOf().fieldOf("yaw").forGetter(effect -> effect.yaws),
                             Codecs.POSITIVE_FLOAT.fieldOf("speed").forGetter(effect -> effect.speed),
                             Codecs.POSITIVE_FLOAT.fieldOf("scale").forGetter(effect -> effect.scale),
 //                            Codecs.POSITIVE_INT.fieldOf("width").forGetter(effect -> effect.width),
@@ -27,9 +27,10 @@ public abstract class AbstractWaveParticleEffect implements ParticleEffect {
         );
     }
 
-    public static <T extends AbstractWaveParticleEffect>PacketCodec<RegistryByteBuf, T> createPacketCodec(Function5<Float, Float, Float, List<BlockPos>, Integer, T> particle) {
+    public static <T extends AbstractWaveParticleEffect>PacketCodec<RegistryByteBuf, T> createPacketCodec(Function5<List<Float>, Float, Float, List<BlockPos>, Integer, T> particle) {
         return PacketCodec.tuple(
-                PacketCodecs.FLOAT, T::getYaw,
+//                PacketCodecs.FLOAT, T::getYaw,
+                PacketCodecs.FLOAT.collect(PacketCodecs.toList()), T::getYaws,
                 PacketCodecs.FLOAT, T::getSpeed,
                 PacketCodecs.FLOAT, T::getScale,
                 BlockPos.PACKET_CODEC.collect(PacketCodecs.toList()), T::getPositions,
@@ -39,27 +40,8 @@ public abstract class AbstractWaveParticleEffect implements ParticleEffect {
         );
     }
 
-//    public static final MapCodec<WaveParticleEffect> CODEC = RecordCodecBuilder.mapCodec(
-//            instance -> instance.group(
-//                            Codecs.POSITIVE_FLOAT.fieldOf("yaw").forGetter(effect -> effect.yaw),
-//                            Codecs.POSITIVE_FLOAT.fieldOf("speed").forGetter(effect -> effect.speed),
-//                            Codecs.POSITIVE_FLOAT.fieldOf("scale").forGetter(effect -> effect.scale),
-//                            Codecs.POSITIVE_INT.fieldOf("width").forGetter(effect -> effect.width),
-//                            Codecs.POSITIVE_INT.fieldOf("lifetime").forGetter(effect -> effect.lifetime)
-//                    )
-//                    .apply(instance, WaveParticleEffect::new)
-//    );
-//
-//    public static final PacketCodec<RegistryByteBuf, WaveParticleEffect> PACKET_CODEC = PacketCodec.tuple(
-//            PacketCodecs.FLOAT, WaveParticleEffect::getYaw,
-//            PacketCodecs.FLOAT, WaveParticleEffect::getSpeed,
-//            PacketCodecs.FLOAT, WaveParticleEffect::getScale,
-//            PacketCodecs.INTEGER, WaveParticleEffect::getLifetime,
-//            PacketCodecs.INTEGER, WaveParticleEffect::getWidth,
-//            WaveParticleEffect::new
-//    );
-
-    protected final float yaw;
+    protected final float yaw = 0;
+    protected final List<Float> yaws;
     protected final float speed;
     protected final float scale;
     protected final int width = 1;
@@ -67,8 +49,9 @@ public abstract class AbstractWaveParticleEffect implements ParticleEffect {
     protected final List<BlockPos> positions;
 
 //    public AbstractWaveParticleEffect(float yaw, float speed, float scale, int width, int lifetime) {
-    public AbstractWaveParticleEffect(float yaw, float speed, float scale, List<BlockPos> positions, int lifetime) {
-        this.yaw = yaw;
+    public AbstractWaveParticleEffect(List<Float> yaws, float speed, float scale, List<BlockPos> positions, int lifetime) {
+//        this.yaw = yaw;
+        this.yaws = yaws;
         this.speed = speed;
         this.scale = scale;
 //        this.width = width;
@@ -78,7 +61,7 @@ public abstract class AbstractWaveParticleEffect implements ParticleEffect {
 
     public AbstractWaveParticleEffect(AbstractWaveParticleEffect params) {
 //        this(params.getYaw(), params.getSpeed(), params.getScale(), params.getWidth(), params.getLifetime());
-        this(params.getYaw(), params.getSpeed(), params.getScale(), params.getPositions(), params.getLifetime());
+        this(params.getYaws(), params.getSpeed(), params.getScale(), params.getPositions(), params.getLifetime());
     }
 
     public float getYaw() {
@@ -103,5 +86,9 @@ public abstract class AbstractWaveParticleEffect implements ParticleEffect {
 
     public List<BlockPos> getPositions() {
         return positions;
+    }
+
+    public List<Float> getYaws() {
+        return yaws;
     }
 }

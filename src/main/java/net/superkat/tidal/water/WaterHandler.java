@@ -19,6 +19,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.chunk.Chunk;
+import net.superkat.tidal.DebugHelper;
 import net.superkat.tidal.Tidal;
 import net.superkat.tidal.TidalWaveHandler;
 import net.superkat.tidal.config.TidalConfig;
@@ -124,9 +125,9 @@ public class WaterHandler {
     //FIXME - loading new chunks quickly doesn't always work as fast as expected(in the same chunk) - a priority queue for closer chunks?
     //FIXME - init build doesn't get all nearby chunks(reload build scans more chunks than join build)
 
-    public WaterHandler(ClientWorld world, TidalWaveHandler tidalWaveHandler) {
-        this.world = world;
+    public WaterHandler(TidalWaveHandler tidalWaveHandler, ClientWorld world) {
         this.tidalWaveHandler = tidalWaveHandler;
+        this.world = world;
     }
 
     public void tick() {

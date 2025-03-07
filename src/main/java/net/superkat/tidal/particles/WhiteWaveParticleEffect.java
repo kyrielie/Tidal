@@ -17,7 +17,7 @@ public class WhiteWaveParticleEffect extends AbstractWaveParticleEffect{
 //    public WhiteWaveParticleEffect(float yaw, float speed, float scale, int width, int lifetime) {
 //        super(yaw, speed, scale, width, lifetime);
 //    }
-    public WhiteWaveParticleEffect(float yaw, float speed, float scale, List<BlockPos> pos, int lifetime) {
+    public WhiteWaveParticleEffect(List<Float> yaw, float speed, float scale, List<BlockPos> pos, int lifetime) {
         super(yaw, speed, scale, pos, lifetime);
     }
 

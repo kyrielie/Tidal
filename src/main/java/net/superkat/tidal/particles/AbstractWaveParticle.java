@@ -17,10 +17,12 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import net.superkat.tidal.TidalWaveHandler;
+import net.superkat.tidal.particles.debug.DebugWaveMovementParticle;
 import org.apache.commons.compress.utils.Lists;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
+import java.awt.*;
 import java.util.List;
 
 public class AbstractWaveParticle extends SpriteBillboardParticle {
@@ -40,6 +42,7 @@ public class AbstractWaveParticle extends SpriteBillboardParticle {
     protected double maxVelZ;
     public int spanWidth;
     public List<BlockPos> positions = Lists.newArrayList();
+    public List<Float> yaws = Lists.newArrayList();
 
     public double hitShoreX;
     public double hitShoreZ;
@@ -55,6 +58,7 @@ public class AbstractWaveParticle extends SpriteBillboardParticle {
         this.scale = params.getScale();
         this.spanWidth = params.getWidth();
         this.positions = params.getPositions();
+        this.yaws = params.getYaws();
         this.maxAge = params.getLifetime();
 
         this.velocityX = Math.cos(Math.toRadians(yaw)) * speed;
@@ -70,8 +74,19 @@ public class AbstractWaveParticle extends SpriteBillboardParticle {
         this.ascending = false;
         this.collidesWithWorld = true;
 
-        for (BlockPos pos : this.positions) {
+        for (int i = 0; i < this.positions.size(); i++) {
+            BlockPos pos = this.positions.get(i);
             this.world.addParticle(ParticleTypes.EGG_CRACK, pos.getX(), pos.getY() + 2, pos.getZ(), 0, 0, 0);
+            Color color = Color.WHITE;
+            float yaw = this.yaws.get(i);
+            DebugWaveMovementParticle.DebugWaveMovementParticleEffect particleEffect = new DebugWaveMovementParticle.DebugWaveMovementParticleEffect(
+                    Vec3d.unpackRgb(color.getRGB()).toVector3f(),
+                    1f,
+                    yaw,
+                    0.3f,
+                    20
+            );
+            this.world.addParticle(particleEffect, pos.getX(), pos.getY() + 1.5, pos.getZ(), 0, 0, 0);
         }
     }
 

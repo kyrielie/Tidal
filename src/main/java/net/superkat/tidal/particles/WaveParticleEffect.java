@@ -16,7 +16,7 @@ public class WaveParticleEffect extends AbstractWaveParticleEffect {
     public static final PacketCodec<RegistryByteBuf, WaveParticleEffect> PACKET_CODEC = createPacketCodec(WaveParticleEffect::new);
 
 //    public WaveParticleEffect(float yaw, float speed, float scale, int width, int lifetime) {
-    public WaveParticleEffect(float yaw, float speed, float scale, List<BlockPos> pos, int lifetime) {
+    public WaveParticleEffect(List<Float> yaw, float speed, float scale, List<BlockPos> pos, int lifetime) {
 //        super(yaw, speed, scale, width, lifetime);
         super(yaw, speed, scale, pos, lifetime);
     }
