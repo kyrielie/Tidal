@@ -7,6 +7,7 @@ import net.minecraft.item.Items;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.random.Random;
+import net.superkat.tidal.wave.TidalWaveHandler;
 
 import java.awt.*;
 

@@ -1,4 +1,4 @@
-package net.superkat.tidal.water;
+package net.superkat.tidal.scan;
 
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import net.minecraft.util.math.BlockPos;

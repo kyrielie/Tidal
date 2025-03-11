@@ -1,4 +1,4 @@
-package net.superkat.tidal.water;
+package net.superkat.tidal.scan;
 
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
@@ -21,10 +21,10 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.chunk.Chunk;
 import net.superkat.tidal.DebugHelper;
 import net.superkat.tidal.Tidal;
-import net.superkat.tidal.TidalWaveHandler;
 import net.superkat.tidal.config.TidalConfig;
 import net.superkat.tidal.particles.debug.DebugShoreParticle;
 import net.superkat.tidal.particles.debug.DebugWaterParticle;
+import net.superkat.tidal.wave.TidalWaveHandler;
 import org.jetbrains.annotations.Nullable;
 
 import java.awt.*;
@@ -119,6 +119,7 @@ public class WaterHandler {
     //idea: if no site is within configurable distance, that water is considered open ocean and extra effects can be added there
     //idea 2: if the amount of blocks associated with a SitePos is really small, non-directional ambient particles spawn
 
+    //TODO - look into completable futures for the scanning tasks
     //TODO - update waterDistCache to be better?
     //TODO - possibly change build to use the tick scanners method instead of doing it all itself?
     //TODO - make it so that the scanners map clears finished chunks to free up memory (surprisingly difficult to do)

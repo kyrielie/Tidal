@@ -1,4 +1,4 @@
-package net.superkat.tidal.water;
+package net.superkat.tidal.scan;
 
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
@@ -7,7 +7,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.world.Heightmap;
-import net.superkat.tidal.TidalWaveHandler;
+import net.superkat.tidal.wave.TidalWaveHandler;
 import org.apache.commons.compress.utils.Lists;
 
 import java.util.Iterator;
