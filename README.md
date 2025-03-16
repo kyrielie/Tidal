@@ -11,6 +11,7 @@ Waves can also crash against blocks if they're in the way, making rocky cliffs n
 - Waves do not always spawn correctly after moving from a chunk reload(facing wrong way).
 - Waves in areas like rivers are too long after washing up, and should probably be scaled down.
 - The scanning process for finding water blocks can be sped up via multithreading.
+- Algorithm to find closest Voronoi site point can be sped up (Quicksort?)
 - Waves "wash up" in midair instead of falling.
 - Info calculated for areas to spawn waves, specifically the length of waves & their spawn position, should be cached per chunk instead of recalculating every wave spawn tick.
 - The wet overlay rendering can probably be optimized.
@@ -19,6 +20,9 @@ Waves can also crash against blocks if they're in the way, making rocky cliffs n
 - Waves cannot be viewed from beneath them.
 - Sounds for the waves
 - Config.
+- Debug mode is inaccessible (should be fixed with config)
+- Possibly use closet shoreline block instead of closest Voronoi sitepos for "distance from shore" if Quicksort + multithreading is fast enough.
+- Small waves should likely be scaled down(there's already 2 different types of waves, small & big, but the current difference is minor).
 
 Lots of work happens behind the scenes to figure out where & how to spawn waves. If waves are not spawning, or spawning unusually(e.g. going wrong way), you can recalculate this info by reloading the chunks via `F3 + a`.
 
