@@ -12,6 +12,7 @@ Waves can also crash against blocks if they're in the way, making rocky cliffs n
 - Waves in areas like rivers are too long after washing up, and should probably be scaled down.
 - The scanning process for finding water blocks can be sped up via multithreading.
 - Algorithm to find closest Voronoi site point can be sped up (Quicksort?)
+- Waves don't seem to be connecting at spawn properly(2 hitboxes right next to each other, causing unintended overlap)
 - Waves "wash up" in midair instead of falling.
 - Info calculated for areas to spawn waves, specifically the length of waves & their spawn position, should be cached per chunk instead of recalculating every wave spawn tick.
 - The wet overlay rendering can probably be optimized.
@@ -25,6 +26,8 @@ Waves can also crash against blocks if they're in the way, making rocky cliffs n
 - Small waves should likely be scaled down(there's already 2 different types of waves, small & big, but the current difference is minor).
 
 Lots of work happens behind the scenes to figure out where & how to spawn waves. If waves are not spawning, or spawning unusually(e.g. going wrong way), you can recalculate this info by reloading the chunks via `F3 + a`.
+
+[![Featured in BlanketCon '25](https://raw.githubusercontent.com/worldwidepixel/badges/642d312b71811b9d2696b562f735b07288844c71/bc25/featured_in/compact.svg)](https://modfest.net/vanity/bc25)
 
 ## Dependencies
 Requires Fabric API. In the near future, a config library might also be required.
