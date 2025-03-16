@@ -12,11 +12,13 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.resource.ResourceType;
 import net.superkat.tidal.duck.TidalWorld;
 import net.superkat.tidal.event.ClientBlockUpdateEvent;
-import net.superkat.tidal.particles.WaveParticle;
-import net.superkat.tidal.particles.WhiteWaveParticle;
+import net.superkat.tidal.particles.SprayParticle;
+import net.superkat.tidal.particles.WhiteSprayParticle;
 import net.superkat.tidal.particles.debug.DebugShoreParticle;
 import net.superkat.tidal.particles.debug.DebugWaterParticle;
 import net.superkat.tidal.particles.debug.DebugWaveMovementParticle;
+import net.superkat.tidal.particles.old.WaveParticle;
+import net.superkat.tidal.particles.old.WhiteWaveParticle;
 import net.superkat.tidal.sprite.TidalSpriteHandler;
 
 public class TidalClient implements ClientModInitializer {
@@ -25,9 +27,12 @@ public class TidalClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
+        ParticleFactoryRegistry.getInstance().register(TidalParticles.SPRAY_PARTICLE, SprayParticle.Factory::new);
+        ParticleFactoryRegistry.getInstance().register(TidalParticles.WHITE_SPRAY_PARTICLE, WhiteSprayParticle.Factory::new);
+
+
         ParticleFactoryRegistry.getInstance().register(TidalParticles.WAVE_PARTICLE, WaveParticle.Factory::new);
         ParticleFactoryRegistry.getInstance().register(TidalParticles.WHITE_WAVE_PARTICLE, WhiteWaveParticle.Factory::new);
-
         ParticleFactoryRegistry.getInstance().register(TidalParticles.DEBUG_WATERBODY_PARTICLE, DebugWaterParticle.Factory::new);
         ParticleFactoryRegistry.getInstance().register(TidalParticles.DEBUG_SHORELINE_PARTICLE, DebugShoreParticle.Factory::new);
         ParticleFactoryRegistry.getInstance().register(TidalParticles.DEBUG_WAVEMOVEMENT_PARTICLE, DebugWaveMovementParticle.Factory::new);

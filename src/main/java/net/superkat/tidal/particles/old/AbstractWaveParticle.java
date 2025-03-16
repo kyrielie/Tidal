@@ -1,4 +1,4 @@
-package net.superkat.tidal.particles;
+package net.superkat.tidal.particles.old;
 
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;

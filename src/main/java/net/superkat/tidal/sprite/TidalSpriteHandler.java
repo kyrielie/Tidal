@@ -33,6 +33,7 @@ public class TidalSpriteHandler implements SimpleResourceReloadListener<SpriteLo
     public static final Identifier MOVING_WHITE_TEXTURE_ID = Identifier.of(MOD_ID, "moving_white");
     public static final Identifier WASHING_TEXTURE_ID = Identifier.of(MOD_ID, "washing");
     public static final Identifier WASHING_WHITE_TEXTURE_ID = Identifier.of(MOD_ID, "washing_white");
+    public static final Identifier WET_OVERLAY_TEXTURE_ID = Identifier.of(MOD_ID, "wet_overlay");
 
     public SpriteAtlasTexture atlas;
     public WaveSpriteProvider spriteProvider;

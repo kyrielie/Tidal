@@ -120,9 +120,11 @@ public class WaterHandler {
     //idea 2: if the amount of blocks associated with a SitePos is really small, non-directional ambient particles spawn
 
     //TODO - look into completable futures for the scanning tasks
+    //TODO - QuickSort algorithm for finding nearest SitePos???
     //TODO - update waterDistCache to be better?
     //TODO - possibly change build to use the tick scanners method instead of doing it all itself?
     //TODO - make it so that the scanners map clears finished chunks to free up memory (surprisingly difficult to do)
+    //FIXME - block updates doesn't seem to work fully (rescan doesn't happen?)
     //FIXME - loading new chunks quickly doesn't always work as fast as expected(in the same chunk) - a priority queue for closer chunks?
     //FIXME - init build doesn't get all nearby chunks(reload build scans more chunks than join build)
 
@@ -238,6 +240,7 @@ public class WaterHandler {
             this.world.addParticle(ParticleTypes.EGG_CRACK, true, site.getX() + 0.5, site.getY() + 2, site.getZ() + 0.5, 0, 0, 0);
         }
 
+        if(!DebugHelper.debug()) return;
         if(!DebugHelper.spyglassInHotbar()) return;
 
         //display all shoreline blocks
@@ -305,7 +308,7 @@ public class WaterHandler {
                 if (scanner.isFinished()) {
 //                    finishedScanners.add(scanner.chunkPos.toLong());
                     this.scanners.put(scanner.chunkPos.toLong(), null);
-                    MinecraftClient.getInstance().player.playSound(SoundEvents.ITEM_TRIDENT_HIT_GROUND, 0.05f, 1f);
+                    if(DebugHelper.debug()) MinecraftClient.getInstance().player.playSound(SoundEvents.ITEM_TRIDENT_HIT_GROUND, 0.05f, 1f);
 //                    Tidal.LOGGER.info("Scanner time: {} ms", Util.getMeasuringTimeMs() - scannerStartTime);
                 }
             }
@@ -368,7 +371,7 @@ public class WaterHandler {
 
             if (scanner.isFinished()) {
                 scanners.put(chunkPosL, null);
-                MinecraftClient.getInstance().player.playSound(SoundEvents.ITEM_TRIDENT_HIT_GROUND, 0.25f, 1f);
+                if(DebugHelper.debug()) MinecraftClient.getInstance().player.playSound(SoundEvents.ITEM_TRIDENT_HIT_GROUND, 0.25f, 1f);
             }
         }
     }
@@ -404,7 +407,7 @@ public class WaterHandler {
                 finishedBlocks.add(chunkPosL);
                 recalcSiteCenters = true;
                 this.calcSiteCenter(chunkPosL);
-                MinecraftClient.getInstance().player.playSound(SoundEvents.BLOCK_VAULT_ACTIVATE, 0.1f, 1f);
+                if(DebugHelper.debug()) MinecraftClient.getInstance().player.playSound(SoundEvents.BLOCK_VAULT_ACTIVATE, 0.1f, 1f);
             }
         }
 
@@ -441,7 +444,7 @@ public class WaterHandler {
         for (SitePos site : this.sites.get(chunkPosL)) {
             site.updateCenter();
         }
-        MinecraftClient.getInstance().player.playSound(SoundEvents.BLOCK_BEEHIVE_ENTER, 0.3f, 1f);
+        if(DebugHelper.debug()) MinecraftClient.getInstance().player.playSound(SoundEvents.BLOCK_BEEHIVE_ENTER, 0.3f, 1f);
     }
 
     //I feel comfortable doing this because this calculation is usually only taken 1-3ms for me
@@ -449,7 +452,7 @@ public class WaterHandler {
         for (SitePos site : this.sites.values().stream().flatMap(Collection::stream).toList()) {
             site.updateCenter();
         }
-        MinecraftClient.getInstance().player.playSound(SoundEvents.ENTITY_WARDEN_SONIC_BOOM, 0.3f, 1f);
+        if(DebugHelper.debug()) MinecraftClient.getInstance().player.playSound(SoundEvents.ENTITY_WARDEN_SONIC_BOOM, 0.3f, 1f);
     }
 
     /**

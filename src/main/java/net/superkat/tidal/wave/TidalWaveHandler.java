@@ -4,6 +4,7 @@ import com.google.common.collect.Queues;
 import com.google.common.collect.Sets;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+import it.unimi.dsi.fastutil.objects.ObjectArraySet;
 import it.unimi.dsi.fastutil.objects.ObjectListIterator;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
 import net.minecraft.block.BlockState;
@@ -15,6 +16,7 @@ import net.minecraft.particle.ParticleTypes;
 import net.minecraft.registry.tag.FluidTags;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
+import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.math.Vec3i;
 import net.minecraft.util.math.random.Random;
@@ -45,6 +47,8 @@ public class TidalWaveHandler {
     public WaveRenderer renderer;
 
     public ObjectArrayList<Wave> waves = new ObjectArrayList<>();
+    //Set of BlockPos's currently being covered by waves - used for rendering wet overlay
+    public ObjectArraySet<BlockPos> coveredBlocks = new ObjectArraySet<>();
 
     public boolean nearbyChunksLoaded = false;
 
@@ -72,7 +76,11 @@ public class TidalWaveHandler {
 
         this.waterHandler.tick();
         tidalTick();
-        debugTick(client, player);
+
+        if(DebugHelper.debug()) {
+            debugTick(client, player);
+        }
+
     }
 
     public void render(WorldRenderContext context) {
@@ -85,9 +93,12 @@ public class TidalWaveHandler {
     public void tidalTick() {
         if(!this.world.getTickManager().shouldTick()) return;
         double time = this.world.getTime();
-        if(time % 40 == 0) {
+        if(time % 80 == 0) {
             spawnAllWaves();
         }
+
+        boolean updateCoveredBlocks = time % 10 == 0;
+        ObjectArraySet<BlockPos> updatedCovered = new ObjectArraySet<>();
 
         for (ObjectListIterator<Wave> iterator = waves.iterator(); iterator.hasNext(); ) {
             Wave wave = iterator.next();
@@ -95,17 +106,15 @@ public class TidalWaveHandler {
 
             if(wave.isDead()) {
                 iterator.remove();
+            } else if(updateCoveredBlocks) {
+                updatedCovered.addAll(wave.getCoveredBlocks());
             }
         }
 
-    }
-
-    public ObjectArrayList<Wave> getWaves() {
-        return this.waves;
+        if(updateCoveredBlocks) this.coveredBlocks = updatedCovered;
     }
 
     public void spawnAllWaves() {
-        if(!DebugHelper.clockInHotbar() && !DebugHelper.offhandClock()) return;
         int distFromShore = TidalConfig.waveDistFromShore;
         int chunkRadius = 3;
         int spawnBlockRadius = 1;
@@ -115,24 +124,23 @@ public class TidalWaveHandler {
         ChunkPos end = new ChunkPos(playerChunk.x - chunkRadius, playerChunk.z - chunkRadius);
         Set<BlockPos> waterBlocks = ChunkPos.stream(start, end).map(chunkPos -> this.waterHandler.getWaterCacheAtDistance(chunkPos, distFromShore)).filter(Objects::nonNull).flatMap(Collection::stream).collect(Collectors.toSet());
         if(waterBlocks.isEmpty()) return;
-//        for (ChunkPos chunkPos : ChunkPos.stream(start, end).toList()) {
-//            Set<BlockPos> waterBlocks = this.waterHandler.getWaterCacheAtDistance(chunkPos, distFromShore);
-//            if(waterBlocks == null) continue;
         spawnWaves(waterBlocks);
 
-        if(DebugHelper.holdingSpyglass()) debugWaveParticles(waterBlocks);
-        if(DebugHelper.offhandClock()) {
-            for (BlockPos water : waterBlocks) {
-                Vec3d pos = water.toCenterPos();
-                this.world.addParticle(ParticleTypes.END_ROD, pos.getX(), pos.getY() + 2.5, pos.getZ(), 0, 0, 0);
+        if(DebugHelper.debug()) {
+            if(DebugHelper.holdingSpyglass()) debugWaveParticles(waterBlocks);
+            if(DebugHelper.offhandClock()) {
+                for (BlockPos water : waterBlocks) {
+                    Vec3d pos = water.toCenterPos();
+                    this.world.addParticle(ParticleTypes.END_ROD, pos.getX(), pos.getY() + 2.5, pos.getZ(), 0, 0, 0);
+                }
             }
         }
-
-//        }
     }
 
     public void spawnWaves(Set<BlockPos> waterBlocks) {
         Set<BlockPos> visited = Sets.newHashSet();
+        int spawned = 0;
+
         for (BlockPos water : waterBlocks) {
             if(visited.contains(water)) continue;
             SitePos site = this.waterHandler.getSiteForPos(water);
@@ -140,39 +148,21 @@ public class TidalWaveHandler {
             if(site.xList.size() < 50) continue;
 
             float yaw = site.getYaw();
-            Set<BlockPos> connected = findConnected(water, waterBlocks, visited);
+            Set<BlockPos> connected = findConnected(water, yaw, waterBlocks, visited);
             visited.addAll(connected);
 
-            BlockPos spawnPos = connected.stream().sorted(Comparator.comparingInt(Vec3i::getZ)).toList().getLast();
-            Wave wave = new Wave(this.world, spawnPos, yaw);
+            boolean bigWave = site.xList.size() >= 100;
+
+            spawned++;
+            float yOffset = MathHelper.sin(spawned) / 16f + 0.65f;
+            BlockPos spawnPos = connected.stream().sorted(Comparator.comparingInt(Vec3i::getZ)).toList().get(connected.size() / 2).add(0, 1, 0);
+            Wave wave = new Wave(this.world, spawnPos, yaw, yOffset, bigWave);
             wave.setWidth((int) (connected.size() * 1.5));
             this.waves.add(wave);
         }
-
-//        List<Wave> spawnedWaves = Lists.newArrayList();
-//        for (BlockPos water : waterBlocks) {
-//            SitePos site = this.waterHandler.getSiteForPos(water);
-//            if(site == null || !site.yawCalculated) continue;
-//            if(site.xList.size() < 50) continue;
-//
-//            float yaw = site.getYaw();
-//            Wave wave = new Wave(this.world, water, yaw);
-//            spawnedWaves.add(wave);
-//        }
-//
-//        this.waves.addAll(spawnedWaves);
-
-//        for (Wave wave : spawnedWaves) {
-//            List<Wave> intersecting = getAllIntersectingWaves(wave, spawnedWaves);
-//            if(intersecting.isEmpty()) continue;
-//            intersecting.sort(Comparator.comparingDouble(value -> wave.getPos().distanceTo(value.getPos())));
-//            Wave neighbour1 = intersecting.getFirst();
-//            Wave neighbour2 = intersecting.size() > 1 ? intersecting.get(1) : null;
-//            wave.setNeighbours(neighbour1, neighbour2);
-//        }
     }
 
-    public Set<BlockPos> findConnected(BlockPos start, Set<BlockPos> waterBlocks, Set<BlockPos> ignoreSet) {
+    public Set<BlockPos> findConnected(BlockPos start, float yaw, Set<BlockPos> waterBlocks, Set<BlockPos> ignoreSet) {
         int maxLength = 3;
         Set<BlockPos> connected = Sets.newHashSet();
         Queue<BlockPos> stack = Queues.newArrayDeque();
@@ -185,6 +175,10 @@ public class TidalWaveHandler {
                 if(water == check) continue;
                 if(ignoreSet.contains(check)) continue;
                 if(!waterBlocks.contains(check)) continue;
+
+                SitePos site = this.waterHandler.getSiteForPos(check);
+                if(site == null || !site.yawCalculated || site.xList.size() < 50) continue;
+                if(Math.abs(site.yaw - yaw) > 15) continue;
                 stack.add(new BlockPos(check));
             }
 
@@ -192,16 +186,6 @@ public class TidalWaveHandler {
         }
         return connected;
     }
-
-//    public List<Wave> getAllIntersectingWaves(Wave wave, List<Wave> checkWaves) {
-//        List<Wave> intersecting = Lists.newArrayList();
-//        for (Wave checkWave : checkWaves) {
-//            if(checkWave == wave) continue;
-//            if(!wave.getConnectBox().intersects(checkWave.getConnectBox())) continue;
-//            intersecting.add(checkWave);
-//        }
-//        return intersecting;
-//    }
 
     public void debugWaveParticles(Set<BlockPos> waterBlocks) {
         Color color = Color.WHITE; //activates the movement particle's custom colors
@@ -221,6 +205,10 @@ public class TidalWaveHandler {
                     20);
             this.world.addParticle(particleEffect, farParticles, water.getX(), water.getY() + 2, water.getZ(), 0, 0,0);
         }
+    }
+
+    public ObjectArrayList<Wave> getWaves() {
+        return this.waves;
     }
 
     //This isn't perfect, but its close enough I suppose
@@ -292,24 +280,6 @@ public class TidalWaveHandler {
         return Math.max(2, loadRadius) + 3;
     }
 
-    public ChunkPos getSyncedRandomChunk() {
-        MinecraftClient client = MinecraftClient.getInstance();
-        ClientPlayerEntity player = client.player;
-        Random syncedRandom = getSyncedRandom();
-
-        ChunkPos playerPos = player.getChunkPos();
-        int playerX = playerPos.x;
-        int playerZ = playerPos.z;
-        int xExtra = syncedRandom.nextBetween(0, 2);
-        int zExtra = syncedRandom.nextBetween(0, 2);
-
-        //rounds to closest 3
-        int x = playerX - (playerX % 3);
-        int z = playerZ - (playerZ % 3);
-
-        return new ChunkPos(x + xExtra, z + zExtra);
-    }
-
     public void debugTick(MinecraftClient client, ClientPlayerEntity player) {
         //show water direction of water blocks
         if(DebugHelper.holdingCompass() || DebugHelper.offhandCompass()) {
@@ -340,7 +310,7 @@ public class TidalWaveHandler {
             if(scannedBlocks.contains(playerPos)) {
                 long chunkPosL = new ChunkPos(playerPos).toLong();
                 SitePos site = this.waterHandler.waterCache.get(chunkPosL).get(playerPos);
-                System.out.println(site.getYaw());
+                System.out.println(site.xList.size());
             }
         }
     }

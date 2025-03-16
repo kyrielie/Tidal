@@ -1,4 +1,4 @@
-package net.superkat.tidal.particles;
+package net.superkat.tidal.particles.old;
 
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;

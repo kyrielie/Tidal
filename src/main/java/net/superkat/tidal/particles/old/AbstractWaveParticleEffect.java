@@ -1,4 +1,4 @@
-package net.superkat.tidal.particles;
+package net.superkat.tidal.particles.old;
 
 import com.mojang.datafixers.util.Function5;
 import com.mojang.serialization.MapCodec;

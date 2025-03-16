@@ -5,17 +5,22 @@ import net.minecraft.particle.ParticleType;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.util.Identifier;
-import net.superkat.tidal.particles.WaveParticleEffect;
-import net.superkat.tidal.particles.WhiteWaveParticleEffect;
+import net.superkat.tidal.particles.SprayParticleEffect;
+import net.superkat.tidal.particles.WhiteSprayParticleEffect;
 import net.superkat.tidal.particles.debug.DebugShoreParticle;
 import net.superkat.tidal.particles.debug.DebugWaterParticle;
 import net.superkat.tidal.particles.debug.DebugWaveMovementParticle;
+import net.superkat.tidal.particles.old.WaveParticleEffect;
+import net.superkat.tidal.particles.old.WhiteWaveParticleEffect;
 
 public class TidalParticles {
     public static final String MOD_ID = Tidal.MOD_ID;
 
     public static final ParticleType<WaveParticleEffect> WAVE_PARTICLE = FabricParticleTypes.complex(WaveParticleEffect.CODEC, WaveParticleEffect.PACKET_CODEC);
     public static final ParticleType<WhiteWaveParticleEffect> WHITE_WAVE_PARTICLE = FabricParticleTypes.complex(WhiteWaveParticleEffect.CODEC, WhiteWaveParticleEffect.PACKET_CODEC);
+
+    public static final ParticleType<SprayParticleEffect> SPRAY_PARTICLE = FabricParticleTypes.complex(SprayParticleEffect.CODEC, SprayParticleEffect.PACKET_CODEC);
+    public static final ParticleType<WhiteSprayParticleEffect> WHITE_SPRAY_PARTICLE = FabricParticleTypes.complex(WhiteSprayParticleEffect.CODEC, WhiteSprayParticleEffect.PACKET_CODEC);
 
     public static final ParticleType<DebugWaterParticle.DebugWaterParticleEffect> DEBUG_WATERBODY_PARTICLE = FabricParticleTypes.complex(
             DebugWaterParticle.DebugWaterParticleEffect.CODEC,
@@ -35,6 +40,9 @@ public class TidalParticles {
     public static void registerParticles() {
         register("wave_particle", WAVE_PARTICLE);
         register("white_wave_particle", WHITE_WAVE_PARTICLE);
+
+        register("spray_particle", SPRAY_PARTICLE);
+        register("white_spray_particle", WHITE_SPRAY_PARTICLE);
 
         register("debug_waterbody_particle", DEBUG_WATERBODY_PARTICLE);
         register("debug_shoreline_particle", DEBUG_SHORELINE_PARTICLE);

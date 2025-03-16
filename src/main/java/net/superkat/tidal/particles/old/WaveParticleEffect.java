@@ -1,4 +1,4 @@
-package net.superkat.tidal.particles;
+package net.superkat.tidal.particles.old;
 
 import com.mojang.serialization.MapCodec;
 import net.minecraft.network.RegistryByteBuf;
