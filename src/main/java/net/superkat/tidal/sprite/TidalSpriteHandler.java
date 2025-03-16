@@ -23,7 +23,6 @@ import java.util.concurrent.Executor;
  * My fix for this is using my own metadata (given via .mcmeta) which says the frame height/width/time, and using my own resource loader. The normal sprite metadata is ignored completely, disallowing the animation to be setup in my atlas.
  */
 public class TidalSpriteHandler implements SimpleResourceReloadListener<SpriteLoader.StitchResult> {
-    //TODO - add note in README about resource packs needing to be specific with their filenames/mcmeta
     public static final String MOD_ID = Tidal.MOD_ID;
     public static final Identifier WAVE_ATLAS_ID = Identifier.of(MOD_ID, "textures/atlas/waves.png");
     private static final Identifier TEXTURE_SOURCE_PATH = Identifier.of(MOD_ID, "wave");
