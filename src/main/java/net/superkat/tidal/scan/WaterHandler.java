@@ -152,7 +152,7 @@ public class WaterHandler {
 
         tickScheduledScanners(player);
 
-        debugTick(client, player);
+        if(DebugHelper.debug()) debugTick(client, player);
     }
 
     /**

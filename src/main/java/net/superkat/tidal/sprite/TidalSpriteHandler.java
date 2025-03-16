@@ -29,18 +29,8 @@ public class TidalSpriteHandler implements SimpleResourceReloadListener<SpriteLo
     private static final Identifier TEXTURE_SOURCE_PATH = Identifier.of(MOD_ID, "wave");
 
     public static final Set<ResourceMetadataReader<?>> METADATA_READERS = Set.of(WaveResourceMetadata.SERIALIZER);
-    public static final Identifier MOVING_TEXTURE_ID = Identifier.of(MOD_ID, "moving");
-    public static final Identifier MOVING_WHITE_TEXTURE_ID = Identifier.of(MOD_ID, "moving_white");
-    public static final Identifier WASHING_TEXTURE_ID = Identifier.of(MOD_ID, "washing");
-    public static final Identifier WASHING_WHITE_TEXTURE_ID = Identifier.of(MOD_ID, "washing_white");
-    public static final Identifier WET_OVERLAY_TEXTURE_ID = Identifier.of(MOD_ID, "wet_overlay");
 
     public SpriteAtlasTexture atlas;
-    public WaveSpriteProvider spriteProvider;
-
-    public WaveSpriteProvider getSpriteProvider() {
-        return this.spriteProvider;
-    }
 
     public Sprite getSprite(Identifier id) {
         return this.atlas.getSprite(id);
@@ -63,7 +53,6 @@ public class TidalSpriteHandler implements SimpleResourceReloadListener<SpriteLo
             profiler.startTick();
             profiler.push("upload");
             this.atlas.upload(stitchResult);
-            this.spriteProvider = createSpriteProvider();
             profiler.pop();
             profiler.endTick();
         }, executor);
@@ -76,15 +65,6 @@ public class TidalSpriteHandler implements SimpleResourceReloadListener<SpriteLo
     @Override
     public Identifier getFabricId() {
         return ResourceReloadListenerKeys.TEXTURES;
-    }
-
-    public WaveSpriteProvider createSpriteProvider() {
-        Sprite movingColorableSprite = this.getSprite(MOVING_TEXTURE_ID);
-        Sprite movingWhiteSprite = this.getSprite(MOVING_WHITE_TEXTURE_ID);
-        Sprite washingColorableSprite = this.getSprite(WASHING_TEXTURE_ID);
-        Sprite washingWhiteSprite = this.getSprite(WASHING_WHITE_TEXTURE_ID);
-
-        return new WaveSpriteProvider(this, movingColorableSprite, movingWhiteSprite, washingColorableSprite, washingWhiteSprite);
     }
 
 }

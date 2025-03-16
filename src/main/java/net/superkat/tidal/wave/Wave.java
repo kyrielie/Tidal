@@ -5,7 +5,6 @@ import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.client.color.world.BiomeColors;
 import net.minecraft.client.render.LightmapTextureManager;
-import net.minecraft.client.texture.Sprite;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.entity.Entity;
 import net.minecraft.particle.ParticleTypes;
@@ -14,9 +13,7 @@ import net.minecraft.util.math.Box;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.LightType;
-import net.superkat.tidal.TidalClient;
 import net.superkat.tidal.particles.SprayParticleEffect;
-import net.superkat.tidal.sprite.WaveSpriteProvider;
 
 import java.awt.*;
 import java.util.List;
@@ -277,26 +274,6 @@ public class Wave {
 
     public boolean isDead() {
         return this.dead;
-    }
-
-    public Sprite getColorableSprite() {
-        return getSpriteProvider().movingColorableSprite;
-    }
-
-    public Sprite getWhiteSprite() {
-        return getSpriteProvider().movingWhiteSprite;
-    }
-
-    public Sprite getWashedColorableSprite() {
-        return getSpriteProvider().washingColorableSprite;
-    }
-
-    public Sprite getWashedWhiteSprite() {
-        return getSpriteProvider().washingWhiteSprite;
-    }
-
-    public WaveSpriteProvider getSpriteProvider() {
-        return TidalClient.TIDAL_SPRITE_HANDLER.getSpriteProvider();
     }
 
 }

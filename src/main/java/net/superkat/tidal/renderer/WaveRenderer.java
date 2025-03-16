@@ -25,7 +25,7 @@ import net.minecraft.util.math.RotationAxis;
 import net.minecraft.util.math.Vec3d;
 import net.superkat.tidal.TidalClient;
 import net.superkat.tidal.sprite.TidalSpriteHandler;
-import net.superkat.tidal.sprite.WaveSpriteProvider;
+import net.superkat.tidal.sprite.TidalSprites;
 import net.superkat.tidal.wave.TidalWaveHandler;
 import net.superkat.tidal.wave.Wave;
 import org.joml.Matrix4f;
@@ -34,10 +34,12 @@ import java.util.Set;
 
 public class WaveRenderer {
     public TidalWaveHandler handler;
+    public TidalSpriteHandler spriteHandler;
     public ClientWorld world;
 
     public WaveRenderer(TidalWaveHandler handler, ClientWorld world) {
         this.handler = handler;
+        this.spriteHandler = TidalClient.TIDAL_SPRITE_HANDLER;
         this.world = world;
     }
 
@@ -101,12 +103,12 @@ public class WaveRenderer {
 
         Matrix4f posMatrix = matrices.peek().getPositionMatrix();
 
-        Sprite colorableSprite = wave.getColorableSprite();
-        Sprite whiteSprite = wave.getWhiteSprite();
+        Sprite colorableSprite = getMovingSprite();
+        Sprite whiteSprite = getMovingWhiteSprite();
 
         boolean washingUp = wave.isWashingUp();
-        Sprite washingColorableSprite = wave.getWashedColorableSprite();
-        Sprite washingWhiteSprite = wave.getWashedWhiteSprite();
+        Sprite washingColorableSprite = getWashedSprite();
+        Sprite washingWhiteSprite = getWashedWhiteSprite();
 
         int light = wave.getLight();
 
@@ -137,11 +139,11 @@ public class WaveRenderer {
         float halfWidth = width / 2f;
         float halfLength = length / 2f;
 
-        int frame = WaveSpriteProvider.getFrameFromAge(sprite, waveAge);
-        float u0 = WaveSpriteProvider.getMinU(sprite);
-        float u1 = WaveSpriteProvider.getMaxU(sprite);
-        float v0 = WaveSpriteProvider.getMinV(sprite, frame);
-        float v1 = WaveSpriteProvider.getMaxV(sprite, frame);
+        int frame = TidalSprites.getFrameFromAge(sprite, waveAge);
+        float u0 = TidalSprites.getMinU(sprite);
+        float u1 = TidalSprites.getMaxU(sprite);
+        float v0 = TidalSprites.getMinV(sprite, frame);
+        float v1 = TidalSprites.getMaxV(sprite, frame);
 
 //        float u0 = 0f;
 //        float u1 = 1f;
@@ -176,7 +178,7 @@ public class WaveRenderer {
         Vec3d cameraPos = camera.getPos();
         Vec3d transPos = pos.toBottomCenterPos().subtract(cameraPos);
 
-        Sprite sprite = TidalClient.TIDAL_SPRITE_HANDLER.getSprite(TidalSpriteHandler.WET_OVERLAY_TEXTURE_ID);
+        Sprite sprite = getWetOverlaySprite();
         float u0 = sprite.getMinU();
         float u1 = sprite.getMaxU();
         float v0 = sprite.getMinV();
@@ -201,6 +203,26 @@ public class WaveRenderer {
                 .color(0.1f, 0.1f, 0.25f, 0.25f).texture(u1, v0).light(light);
 
         matrices.pop();
+    }
+
+    public Sprite getMovingSprite() {
+        return spriteHandler.getSprite(TidalSprites.MOVING_TEXTURE_ID);
+    }
+
+    public Sprite getMovingWhiteSprite() {
+        return spriteHandler.getSprite(TidalSprites.MOVING_WHITE_TEXTURE_ID);
+    }
+
+    public Sprite getWashedSprite() {
+        return spriteHandler.getSprite(TidalSprites.WASHING_TEXTURE_ID);
+    }
+
+    public Sprite getWashedWhiteSprite() {
+        return spriteHandler.getSprite(TidalSprites.WASHING_WHITE_TEXTURE_ID);
+    }
+
+    public Sprite getWetOverlaySprite() {
+        return spriteHandler.getSprite(TidalSprites.WET_OVERLAY_TEXTURE_ID);
     }
 
 }

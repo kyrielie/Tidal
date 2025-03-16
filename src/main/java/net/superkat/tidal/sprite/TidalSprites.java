@@ -1,24 +1,16 @@
 package net.superkat.tidal.sprite;
 
 import net.minecraft.client.texture.Sprite;
+import net.minecraft.util.Identifier;
 
-public class WaveSpriteProvider {
-    public TidalSpriteHandler handler;
-    public Sprite movingColorableSprite;
-    public Sprite movingWhiteSprite;
-    public Sprite washingColorableSprite;
-    public Sprite washingWhiteSprite;
-
-    public WaveSpriteProvider(TidalSpriteHandler handler, Sprite movingColorableSprite, Sprite movingWhiteSprite, Sprite washingColorableSprite, Sprite washingWhiteSprite) {
-        this.handler = handler;
-        this.movingColorableSprite = movingColorableSprite;
-        this.movingWhiteSprite = movingWhiteSprite;
-        this.washingColorableSprite = washingColorableSprite;
-        this.washingWhiteSprite = washingWhiteSprite;
-    }
+public class TidalSprites {
+    public static final Identifier MOVING_TEXTURE_ID = Identifier.of(TidalSpriteHandler.MOD_ID, "moving");
+    public static final Identifier MOVING_WHITE_TEXTURE_ID = Identifier.of(TidalSpriteHandler.MOD_ID, "moving_white");
+    public static final Identifier WASHING_TEXTURE_ID = Identifier.of(TidalSpriteHandler.MOD_ID, "washing");
+    public static final Identifier WASHING_WHITE_TEXTURE_ID = Identifier.of(TidalSpriteHandler.MOD_ID, "washing_white");
+    public static final Identifier WET_OVERLAY_TEXTURE_ID = Identifier.of(TidalSpriteHandler.MOD_ID, "wet_overlay");
 
     //TODO - remove wave width thing from waveresourcemetadata
-    //TODO - sine-wave y-level incrementals on wave spawning
 
     public static int getFrameFromAge(Sprite sprite, int age) {
         int frameCount = getFrameCount(sprite);
