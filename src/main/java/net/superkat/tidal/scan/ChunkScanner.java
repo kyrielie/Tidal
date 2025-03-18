@@ -38,6 +38,10 @@ public class ChunkScanner {
     public ChunkPos chunkPos;
     public boolean finished = false;
 
+    public ObjectOpenHashSet<BlockPos> waters = new ObjectOpenHashSet<>();
+    public ObjectOpenHashSet<BlockPos> shorelines = new ObjectOpenHashSet<>();
+    public ObjectOpenHashSet<SitePos> sites = new ObjectOpenHashSet<>();
+
     //TODO(unimportant for now) - scan above and below for water to jumps in the water
     public ChunkScanner(WaterHandler handler, ClientWorld world, ChunkPos chunkPos) {
         this.handler = handler;
@@ -46,6 +50,21 @@ public class ChunkScanner {
         BlockPos startPos = chunkPos.getStartPos();
         BlockPos endPos = startPos.add(15, 0, 15);
         this.cachedIterator = stack(startPos, endPos);
+    }
+
+    public ScannedChunk scan() {
+        BlockPos startPos = chunkPos.getStartPos();
+        BlockPos endPos = startPos.add(15, 0, 15);
+        for (BlockPos pos : BlockPos.iterate(startPos, endPos)) {
+            int y = sampleHeightmap(pos) - 1;
+            scanPos(pos.withY(y));
+        }
+
+        return new ScannedChunk(this.chunkPos, this.waters, this.shorelines, this.sites);
+    }
+
+    private int sampleHeightmap(BlockPos pos) {
+        return this.world.getTopY(Heightmap.Type.WORLD_SURFACE, pos.getX(), pos.getZ());
     }
 
     /**
@@ -105,18 +124,16 @@ public class ChunkScanner {
 
         //shoreline creation - neighbouring water blocks scan shoreline blocks and add them
         if(!nonWaterBlocks.isEmpty()) {
-            for (BlockPos nonWater : nonWaterBlocks) {
-                this.handler.addShorelineBlock(nonWater);
-            }
+            this.shorelines.addAll(nonWaterBlocks);
 
             this.shorelinesSinceSite += nonWaterBlocks.size();
             if(this.shorelinesSinceSite >= 8) {
-                this.handler.createSitePos(pos);
+                this.sites.add(new SitePos(pos));
                 this.shorelinesSinceSite = 0;
             }
         }
 
-        this.handler.queueWaterBlocks(waterBlocks);
+        this.waters.addAll(waterBlocks);
     }
 
     /**

@@ -1,6 +1,8 @@
 package net.superkat.tidal.scan;
 
+import com.google.common.collect.Queues;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.ints.IntObjectPair;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
@@ -25,6 +27,7 @@ import net.superkat.tidal.config.TidalConfig;
 import net.superkat.tidal.particles.debug.DebugShoreParticle;
 import net.superkat.tidal.particles.debug.DebugWaterParticle;
 import net.superkat.tidal.wave.TidalWaveHandler;
+import org.apache.commons.compress.utils.Lists;
 import org.jetbrains.annotations.Nullable;
 
 import java.awt.*;
@@ -32,6 +35,10 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.Executor;
+import java.util.concurrent.PriorityBlockingQueue;
 import java.util.stream.Collectors;
 
 /**
@@ -116,6 +123,18 @@ public class WaterHandler {
     //boolean for if the centers of ALL sites should be recalculated - it's a very fast calculation, so I feel comfortable doing it all at once
     public boolean recalcSiteCenters = true;
 
+    public int activeScanners = 0;
+
+    public CompletableFuture<List<ScannedChunk>> chunkScanFuture = null;
+    private final Executor executor;
+
+    public Set<WaitingChunkPos> waitingChunks = new ObjectOpenHashSet<>();
+    public PriorityBlockingQueue<WaitingChunkPos> waitingChunkQueue = new PriorityBlockingQueue<>();
+    public ConcurrentLinkedQueue<ScannedChunk> scannedChunks = Queues.newConcurrentLinkedQueue();
+    public ConcurrentLinkedQueue<WaterSiteChunk> waitingSiteChunks = Queues.newConcurrentLinkedQueue();
+
+    public long start = 0;
+
     //idea: if no site is within configurable distance, that water is considered open ocean and extra effects can be added there
     //idea 2: if the amount of blocks associated with a SitePos is really small, non-directional ambient particles spawn
 
@@ -131,6 +150,197 @@ public class WaterHandler {
     public WaterHandler(TidalWaveHandler tidalWaveHandler, ClientWorld world) {
         this.tidalWaveHandler = tidalWaveHandler;
         this.world = world;
+        this.executor = Util.getMainWorkerExecutor();
+    }
+
+    public void scheduleChunkScanner() {
+        WaitingChunkPos waitingPos = pollChunk();
+        if(waitingPos == null) return;
+        ChunkPos pos = waitingPos.getPos();
+
+        CompletableFuture.supplyAsync(() -> {
+                    ChunkScanner chunkScanner = new ChunkScanner(this, this.world, pos);
+                    return chunkScanner.scan();
+        }, executor).thenAccept(scannedChunk -> {
+            this.scannedChunks.offer(scannedChunk);
+//            if(TidalConfig.debug) MinecraftClient.getInstance().world.playSound(MinecraftClient.getInstance().player, MinecraftClient.getInstance().player.getBlockPos(), SoundEvents.ITEM_TRIDENT_HIT_GROUND, SoundCategory.AMBIENT, 1f, 1f);
+        });
+    }
+
+    @Nullable
+    public WaitingChunkPos pollChunk() {
+        WaitingChunkPos waitingChunkPos = this.waitingChunkQueue.poll();
+        if(waitingChunkPos == null) return null;
+        this.waitingChunks.remove(waitingChunkPos);
+        return waitingChunkPos;
+    }
+
+    public void prepareSiteFinding() {
+        for (ScannedChunk scannedChunk : scannedChunks) {
+            long chunkPosL = scannedChunk.chunkPos;
+            this.shoreBlocks.putIfAbsent(chunkPosL, scannedChunk.shorelines);
+            this.sites.computeIfAbsent(chunkPosL, aLong -> {
+                this.cachedSiteSet.addAll(scannedChunk.sites);
+                return scannedChunk.sites;
+            });
+        }
+    }
+
+    public void scheduleSiteFinding() {
+        for (int i = 0; i < scannedChunks.size(); i++) {
+            ScannedChunk scannedChunk = scannedChunks.poll();
+
+            Object2ObjectOpenHashMap<BlockPos, SitePos> waterSiteMap = new Object2ObjectOpenHashMap<>();
+            Int2ObjectOpenHashMap<ObjectOpenHashSet<BlockPos>> distWaterSetMap = new Int2ObjectOpenHashMap<>();
+
+            CompletableFuture.supplyAsync(() -> {
+                for (BlockPos water : scannedChunk.waters) {
+                    IntObjectPair<SitePos> distSite = calcClosestSite(water);
+                    int distance = distSite.firstInt();
+                    SitePos site = distSite.second();
+
+                    if(site != null) {
+                        waterSiteMap.put(water, site);
+                        distWaterSetMap.computeIfAbsent(distance, dist -> new ObjectOpenHashSet<>()).add(water);
+                    }
+                }
+
+                return new WaterSiteChunk(scannedChunk.chunkPos, waterSiteMap, distWaterSetMap);
+            }, this.executor).thenAccept(waterSiteChunk -> {
+                this.waitingSiteChunks.offer(waterSiteChunk);
+            });
+        }
+    }
+
+    @Nullable
+    public IntObjectPair<SitePos> calcClosestSite(BlockPos pos) {
+        double distance = 0;
+        SitePos closest = null;
+        for (SitePos site : this.cachedSiteSet) {
+            double dx = pos.getX() + 0.5 - site.getX();
+            double dz = pos.getZ() + 0.5 - site.getZ();
+            double checkDist = dx * dx + dz * dz;
+//            double checkDist = Math.max(Math.abs(dx), Math.abs(dz));
+//            double checkDist = Math.abs(dx) + Math.abs(dz);
+
+            if(closest == null || checkDist < distance) {
+                closest = site;
+                distance = checkDist;
+            }
+        }
+
+        int intDistance = (int) Math.sqrt(distance);
+        return IntObjectPair.of(intDistance, closest);
+    }
+
+    public void transferWaterSiteChunks() {
+        WaterSiteChunk waterSiteChunk = waitingSiteChunks.poll();
+        if(waterSiteChunk == null) return;
+        long chunkPosL = waterSiteChunk.chunkPos;
+
+        for (Map.Entry<BlockPos, SitePos> posSiteEntry : waterSiteChunk.waterSiteMap.entrySet()) {
+            SitePos site = posSiteEntry.getValue();
+            BlockPos pos = posSiteEntry.getKey();
+            site.addPos(pos);
+        }
+
+        this.waterCache.put(chunkPosL, waterSiteChunk.waterSiteMap);
+        this.waterDistCache.put(chunkPosL, waterSiteChunk.distWaterMap);
+
+        if(this.waitingSiteChunks.isEmpty()) {
+            this.calcAllSiteCenters();
+        }
+    }
+
+    //TODO - support loading new chunks
+    //TODO - clean & build during rebuild
+    //TODO - clean up above mess
+
+    public CompletableFuture<List<ScannedChunk>> scheduleScan() {
+        this.built = false;
+        //Scan all chunks
+        List<CompletableFuture<ScannedChunk>> chunkScanFutures = Lists.newArrayList();
+        int chunkSize = waitingChunkQueue.size();
+        for (int i = 0; i < chunkSize; i++) {
+            //create completable future for all needing to be scanned chunks
+            WaitingChunkPos pos = this.waitingChunkQueue.poll();
+            CompletableFuture<ScannedChunk> scanFuture = scheduleChunkScan(pos.getPos());
+            chunkScanFutures.add(scanFuture);
+        }
+        CompletableFuture<List<ScannedChunk>> chunkScanFuture = Util.combineSafe(chunkScanFutures);
+
+        //Scan all water blocks to associate info like closest SitePos & distance from said SitePos
+        List<CompletableFuture<WaterSiteChunk>> siteScanFutures = Lists.newArrayList();
+        Long2ObjectOpenHashMap<ObjectOpenHashSet<BlockPos>> waterBlocks = new Long2ObjectOpenHashMap<>();
+
+        chunkScanFuture.thenAccept(chunks -> {
+            //Put results from scanned chunks into respective maps(shoreblocks, sites)
+            for (ScannedChunk scannedChunk : chunks) {
+                long chunkPosL = scannedChunk.chunkPos;
+                if(scannedChunk.shorelines != null) this.shoreBlocks.put(chunkPosL, scannedChunk.shorelines);
+                if(scannedChunk.sites != null) {
+                    this.sites.computeIfAbsent(chunkPosL, aLong -> {
+                        ObjectOpenHashSet<SitePos> chunkSites = scannedChunk.sites;
+                        this.cachedSiteSet.addAll(chunkSites);
+                        return chunkSites;
+                    });
+                }
+                if(scannedChunk.waters != null) waterBlocks.put(chunkPosL, scannedChunk.waters);
+            }
+
+            //Create futures for all water blocks to find their closest SitePos
+            for (Map.Entry<Long, ObjectOpenHashSet<BlockPos>> chunkWaterEntry : waterBlocks.entrySet()) {
+                //finds closest SitePos and distance
+                if(chunkWaterEntry == null) continue;
+                long chunkPosL = chunkWaterEntry.getKey();
+                ObjectOpenHashSet<BlockPos> waters = chunkWaterEntry.getValue();
+                if(waters == null) continue;
+                CompletableFuture<WaterSiteChunk> scanFuture = scheduleWaterScan(chunkPosL, waters);
+                siteScanFutures.add(scanFuture);
+            }
+        }).thenCompose(unused -> Util.combineSafe(siteScanFutures)).thenAccept(waterSiteChunks -> {
+            //Takes in the list of waters blocks and SitePos's, adds the blocks to the SitePos for center+direction calc,
+            //then caches water blocks + SitePos info
+            for (WaterSiteChunk waterSiteChunk : waterSiteChunks) {
+                long chunkPosL = waterSiteChunk.chunkPos;
+                for (Map.Entry<BlockPos, SitePos> entry : waterSiteChunk.waterSiteMap.entrySet()) {
+                    SitePos site = entry.getValue();
+                    BlockPos pos = entry.getKey();
+                    site.addPos(pos);
+                }
+                this.waterCache.put(chunkPosL, waterSiteChunk.waterSiteMap);
+                this.waterDistCache.put(chunkPosL, waterSiteChunk.distWaterMap);
+            }
+        }).whenComplete((unused, throwable) -> {
+            //Calculates the center + direction of all the SitePos's
+            this.calcAllSiteCenters();
+            this.built = true;
+        });
+
+        return chunkScanFuture;
+    }
+
+    private CompletableFuture<ScannedChunk> scheduleChunkScan(ChunkPos pos) {
+        return CompletableFuture.supplyAsync(() -> {
+            ChunkScanner chunkScanner = new ChunkScanner(this, this.world, pos);
+            return chunkScanner.scan();
+        }, executor);
+    }
+
+    private CompletableFuture<WaterSiteChunk> scheduleWaterScan(long chunkPosL, ObjectOpenHashSet<BlockPos> waters) {
+        return CompletableFuture.supplyAsync(() -> {
+            Object2ObjectOpenHashMap<BlockPos, SitePos> siteMap = new Object2ObjectOpenHashMap<>();
+            Int2ObjectOpenHashMap<ObjectOpenHashSet<BlockPos>> distMap = new Int2ObjectOpenHashMap<>();
+            for (BlockPos water : waters) {
+                IntObjectPair<SitePos> closestSite = calcClosestSite(water);
+                if(closestSite == null) continue;
+                int dist = closestSite.firstInt();
+                SitePos site = closestSite.second();
+                siteMap.put(water, site);
+                distMap.computeIfAbsent(dist, aInt -> new ObjectOpenHashSet<>()).add(water);
+            }
+            return new WaterSiteChunk(chunkPosL, siteMap, distMap);
+        }, executor);
     }
 
     public void tick() {
@@ -138,19 +348,15 @@ public class WaterHandler {
         ClientPlayerEntity player = client.player;
         assert player != null;
 
-        if(!built && tidalWaveHandler.nearbyChunksLoaded) {
-            built = build();
-        }
-
-        if(built) {
-            boolean noMoreWaitingBlocks = tickWaitingWaterBlocks(false);
-            if(noMoreWaitingBlocks && recalcSiteCenters) { //failsafe I guess?
-                this.calcAllSiteCenters();
-                this.recalcSiteCenters = false;
+        if(!this.waitingChunkQueue.isEmpty() && tidalWaveHandler.nearbyChunksLoaded) {
+            if(this.chunkScanFuture == null) {
+                long start = Util.getMeasuringTimeMs();
+                this.chunkScanFuture = scheduleScan();
+                this.chunkScanFuture.whenComplete((chunks, throwable) -> {
+                    Tidal.LOGGER.info("Scan time: {} ms", Util.getMeasuringTimeMs() - start);
+                });
             }
         }
-
-        tickScheduledScanners(player);
 
         if(DebugHelper.debug()) debugTick(client, player);
     }
@@ -452,7 +658,7 @@ public class WaterHandler {
         for (SitePos site : this.sites.values().stream().flatMap(Collection::stream).toList()) {
             site.updateCenter();
         }
-        if(DebugHelper.debug()) MinecraftClient.getInstance().player.playSound(SoundEvents.ENTITY_WARDEN_SONIC_BOOM, 0.3f, 1f);
+//        if(DebugHelper.debug()) MinecraftClient.getInstance().player.playSound(SoundEvents.ENTITY_WARDEN_SONIC_BOOM, 0.3f, 1f);
     }
 
     /**
@@ -495,6 +701,20 @@ public class WaterHandler {
     public void scheduleChunkScanner(ChunkPos chunkPos) {
         long pos = chunkPos.toLong();
         this.scanners.computeIfAbsent(pos, pos1 -> new ChunkScanner(this, this.world, chunkPos));
+
+        WaitingChunkPos waitingChunkPos = new WaitingChunkPos(chunkPos);
+        this.waitingChunks.add(waitingChunkPos);
+        checkWaitingChunks();
+//        this.scheduleChunkScanner();
+    }
+
+    public void checkWaitingChunks() {
+        for (WaitingChunkPos waitingChunk : this.waitingChunks) {
+            waitingChunk.calcDist();
+            if(waitingChunk.shouldScan() && !this.waitingChunkQueue.contains(waitingChunk)) {
+                this.waitingChunkQueue.offer(waitingChunk);
+            }
+        }
     }
 
     /**
