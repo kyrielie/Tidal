@@ -68,7 +68,7 @@ public class TidalClient implements ClientModInitializer {
             if(client.world == null || client.player == null) return;
             TidalWorld tidalWorld = (TidalWorld) client.world;
             tidalWorld.tidal$tidalWaveHandler().reloadNearbyChunks();
-            tidalWorld.tidal$tidalWaveHandler().waterHandler.rebuild();
+//            tidalWorld.tidal$tidalWaveHandler().waterHandler.rebuild();
         });
 
         WorldRenderEvents.AFTER_TRANSLUCENT.register(context -> {

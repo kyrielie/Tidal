@@ -35,6 +35,12 @@ public class SitePos {
         this.zList.removeInt(zIndex);
     }
 
+    public void clearPositions() {
+        this.xList.clear();
+        this.zList.clear();
+        this.yawCalculated = false;
+    }
+
     public void updateCenter() {
         if(xList.isEmpty() || zList.isEmpty()) return;
         int xSize = this.xList.size();
