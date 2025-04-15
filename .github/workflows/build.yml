@@ -36,4 +36,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: artifacts
-          path: build/libs/*
+          path: build/libs/tidal-0.0.2-beta.jar
