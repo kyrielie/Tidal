@@ -35,5 +35,5 @@ jobs:
         if: ${{ matrix.java == '21' }}
         uses: actions/upload-artifact@v4
         with:
-          name: artifacts
+          name: tidal-0.0.2-beta.jar
           path: build/libs/tidal-0.0.2-beta.jar
